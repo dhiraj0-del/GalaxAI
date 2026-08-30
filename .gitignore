@@ -1,6 +1,20 @@
+# ============================================
+# GALAXAI GITIGNORE
+# ============================================
+
 # Dataset
+data/gzh/
 data/raw/
 data/processed/
+
+# Dataset files
+*.csv
+*.csv.gz
+*.parquet
+*.tar
+*.tar.gz
+*.zip
+*.7z
 
 # Python
 __pycache__/
@@ -9,19 +23,38 @@ __pycache__/
 # Virtual environment
 .venv/
 venv/
+env/
 
 # Jupyter
 .ipynb_checkpoints/
 
-# Models
+# Machine Learning Models
 *.pt
 *.pth
 *.h5
+*.hdf5
 *.keras
+*.onnx
+*.pkl
+*.joblib
 
 # Logs
 logs/
+checkpoints/
+wandb/
+mlruns/
+
+# IDE
+.vscode/
+.idea/
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
