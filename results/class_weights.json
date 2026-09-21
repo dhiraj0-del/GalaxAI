@@ -1,0 +1,72 @@
+{
+  "binary": {
+    "featured": {
+      "negative": 16263,
+      "positive": 3566,
+      "pos_weight": 4.560572
+    },
+    "edge_on": {
+      "negative": 42783,
+      "positive": 5707,
+      "pos_weight": 7.496583
+    },
+    "bar": {
+      "negative": 45380,
+      "positive": 1694,
+      "pos_weight": 26.788666
+    },
+    "spiral_arms": {
+      "negative": 34842,
+      "positive": 7380,
+      "pos_weight": 4.721138
+    },
+    "disturbed": {
+      "negative": 39140,
+      "positive": 817,
+      "pos_weight": 47.906977
+    },
+    "merger": {
+      "negative": 39673,
+      "positive": 705,
+      "pos_weight": 56.273759
+    },
+    "clumpy": {
+      "negative": 25787,
+      "positive": 8156,
+      "pos_weight": 3.161721
+    },
+    "symmetry": {
+      "negative": 19222,
+      "positive": 14608,
+      "pos_weight": 1.315854
+    }
+  },
+  "multiclass": {
+    "bulge": {
+      "class_counts": [
+        14839,
+        6227,
+        3088,
+        1107
+      ],
+      "class_weights": [
+        0.425585,
+        1.014172,
+        2.045094,
+        5.704833
+      ]
+    },
+    "roundedness": {
+      "class_counts": [
+        7289,
+        22664,
+        8233
+      ],
+      "class_weights": [
+        1.746284,
+        0.561625,
+        1.546054
+      ]
+    }
+  }
+}

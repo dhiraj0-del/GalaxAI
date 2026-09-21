@@ -1,1095 +1,1372 @@
-import os
-import sys
-import json
-
-import pandas as pd
 import streamlit as st
-import torch
 from PIL import Image
-from torchvision import transforms
+
+from src.inference import load_model, predict, model_info
 
 
 # ============================================================
-# GALAXAI - MODEL 1
-# ============================================================
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-MODEL_PATH = os.path.join(
-    BASE_DIR,
-    "results",
-    "models",
-    "custom_cnn_best.pth"
-)
-
-THRESHOLD_PATH = os.path.join(
-    BASE_DIR,
-    "results",
-    "evaluation",
-    "custom_cnn_optimal_thresholds.json"
-)
-
-IMAGE_SIZE = 224
-
-
-# ============================================================
-# TARGETS
-# ============================================================
-
-TARGETS = [
-    "spiral_arms",
-    "bar",
-    "smooth_featured",
-    "disturbed"
-]
-
-
-DISPLAY_NAMES = {
-    "spiral_arms": "Spiral Arms",
-    "bar": "Bar",
-    "smooth_featured": "Smooth vs Featured",
-    "disturbed": "Disturbed"
-}
-
-
-ICONS = {
-    "spiral_arms": "🌀",
-    "bar": "▰",
-    "smooth_featured": "✨",
-    "disturbed": "💥"
-}
-
-
-# ============================================================
-# MODEL 1 - FINAL TEST PERFORMANCE
-#
-# These are the FINAL TEST results obtained after applying
-# thresholds selected ONLY from the validation set.
-# ============================================================
-
-FINAL_METRICS = {
-
-    "spiral_arms": {
-        "accuracy": 0.8930,
-        "precision": 0.6736,
-        "recall": 0.6614,
-        "f1": 0.6674,
-        "roc_auc": 0.8680,
-        "pr_auc": 0.7077,
-    },
-
-    "bar": {
-        "accuracy": 0.8657,
-        "precision": 0.0997,
-        "recall": 0.3333,
-        "f1": 0.1535,
-        "roc_auc": 0.6844,
-        "pr_auc": 0.0866,
-    },
-
-    "smooth_featured": {
-        "accuracy": 0.9236,
-        "precision": 0.9350,
-        "recall": 0.9783,
-        "f1": 0.9562,
-        "roc_auc": 0.9251,
-        "pr_auc": 0.9814,
-    },
-
-    "disturbed": {
-        "accuracy": 0.6156,
-        "precision": 0.0516,
-        "recall": 0.5243,
-        "f1": 0.0939,
-        "roc_auc": 0.6301,
-        "pr_auc": 0.0487,
-    }
-}
-
-
-# ============================================================
-# FINAL TEST CONFUSION MATRICES
-#
-# Format:
-# [[TN, FP],
-#  [FN, TP]]
-# ============================================================
-
-FINAL_CONFUSION_MATRICES = {
-
-    "spiral_arms": [
-        [2130, 141],
-        [149, 291]
-    ],
-
-    "bar": [
-        [2314, 298],
-        [66, 33]
-    ],
-
-    "smooth_featured": [
-        [247, 157],
-        [50, 2257]
-    ],
-
-    "disturbed": [
-        [1615, 993],
-        [49, 54]
-    ]
-}
-
-
-# ============================================================
-# OVERALL MODEL 1 TEST PERFORMANCE
-# ============================================================
-
-OVERALL_METRICS = {
-    "accuracy": 0.8245,
-    "precision": 0.4400,
-    "recall": 0.6243,
-    "f1": 0.4677,
-    "roc_auc": 0.7769,
-    "pr_auc": 0.4561
-}
-
-
-# ============================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ============================================================
 
 st.set_page_config(
-    page_title="GalaxAI | Galaxy Morphology",
+    page_title="GALAXAI — Galaxy Morphology",
     page_icon="🌌",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 
 # ============================================================
-# ============================================================
-# STANDARD STREAMLIT INTERFACE
-# Custom CSS removed for maximum reliability.
+# CUSTOM CSS
 # ============================================================
 
+st.markdown(
+    """
+    <style>
 
+    /* ======================================================
+       GLOBAL
+       ====================================================== */
+
+    html, body, [data-testid="stAppViewContainer"] {
+        background:
+            radial-gradient(
+                circle at 20% 10%,
+                rgba(70, 90, 190, 0.18),
+                transparent 30%
+            ),
+            radial-gradient(
+                circle at 85% 70%,
+                rgba(120, 55, 190, 0.16),
+                transparent 32%
+            ),
+            #03050d !important;
+    }
+
+    [data-testid="stAppViewContainer"] {
+        overflow-x: hidden;
+    }
+
+    [data-testid="stHeader"] {
+        background: transparent !important;
+    }
+
+    [data-testid="stToolbar"] {
+        visibility: hidden;
+    }
+
+    .block-container {
+        max-width: 1450px;
+        padding-top: 1.5rem;
+        padding-bottom: 4rem;
+    }
+
+
+    /* ======================================================
+       ANIMATED SPACE BACKGROUND
+       ====================================================== */
+
+    [data-testid="stAppViewContainer"]::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.65;
+        background-image:
+            radial-gradient(circle, rgba(255,255,255,0.65) 1px, transparent 1px),
+            radial-gradient(circle, rgba(160,180,255,0.35) 1px, transparent 1px);
+        background-size: 110px 110px, 170px 170px;
+        background-position: 0 0, 40px 70px;
+        animation: starMove 35s linear infinite;
+        z-index: 0;
+    }
+
+    @keyframes starMove {
+        from {
+            transform: translate3d(0, 0, 0);
+        }
+
+        to {
+            transform: translate3d(-80px, 100px, 0);
+        }
+    }
+
+
+    /* ======================================================
+       HERO
+       ====================================================== */
+
+    .hero-wrapper {
+        position: relative;
+        overflow: hidden;
+        padding: 42px 46px;
+        border-radius: 30px;
+        margin-bottom: 28px;
+
+        background:
+            radial-gradient(
+                circle at 80% 30%,
+                rgba(112, 95, 255, 0.22),
+                transparent 30%
+            ),
+            linear-gradient(
+                135deg,
+                rgba(15, 21, 48, 0.95),
+                rgba(7, 10, 25, 0.92)
+            );
+
+        border: 1px solid rgba(145, 160, 255, 0.22);
+
+        box-shadow:
+            0 30px 90px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 rgba(255,255,255,0.08);
+
+        transform: perspective(1200px) rotateX(1deg);
+    }
+
+    .hero-wrapper::after {
+        content: "";
+        position: absolute;
+        width: 260px;
+        height: 260px;
+        right: -70px;
+        top: -80px;
+
+        border-radius: 50%;
+
+        background:
+            radial-gradient(
+                circle,
+                rgba(125, 140, 255, 0.18),
+                rgba(70, 40, 150, 0.08),
+                transparent 70%
+            );
+
+        filter: blur(8px);
+        animation: pulseOrb 5s ease-in-out infinite;
+    }
+
+    @keyframes pulseOrb {
+        0%, 100% {
+            transform: scale(0.9);
+            opacity: 0.55;
+        }
+
+        50% {
+            transform: scale(1.15);
+            opacity: 0.9;
+        }
+    }
+
+    .hero-kicker {
+        color: #8e9bd0;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+    }
+
+    .hero-title {
+        font-size: clamp(2.8rem, 6vw, 5.5rem);
+        line-height: 0.95;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        margin: 0;
+
+        background:
+            linear-gradient(
+                100deg,
+                #ffffff 0%,
+                #b9c7ff 45%,
+                #d7b8ff 75%,
+                #ffffff 100%
+            );
+
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+        max-width: 800px;
+        margin-top: 18px;
+
+        color: #a8b2cf;
+        font-size: 1.02rem;
+        line-height: 1.7;
+    }
+
+    .hero-tag {
+        display: inline-block;
+        margin-top: 20px;
+        padding: 7px 13px;
+
+        border-radius: 999px;
+
+        color: #c7d0ff;
+        background: rgba(115, 130, 255, 0.10);
+        border: 1px solid rgba(130, 145, 255, 0.20);
+
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+
+    /* ======================================================
+       SECTION TITLES
+       ====================================================== */
+
+    .section-kicker {
+        color: #727fa9;
+        font-size: 0.70rem;
+        font-weight: 800;
+        letter-spacing: 0.20em;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+
+    .section-title {
+        color: #eef1ff;
+        font-size: 1.65rem;
+        font-weight: 800;
+        margin-bottom: 18px;
+    }
+
+
+    /* ======================================================
+       GLASS PANELS
+       ====================================================== */
+
+    .glass-panel {
+        padding: 25px;
+
+        border-radius: 24px;
+
+        background:
+            linear-gradient(
+                145deg,
+                rgba(22, 29, 59, 0.78),
+                rgba(8, 12, 28, 0.82)
+            );
+
+        border: 1px solid rgba(150, 165, 255, 0.14);
+
+        box-shadow:
+            0 22px 60px rgba(0, 0, 0, 0.30),
+            inset 0 1px 0 rgba(255,255,255,0.05);
+
+        backdrop-filter: blur(18px);
+
+        transition:
+            transform 0.25s ease,
+            border-color 0.25s ease;
+    }
+
+    .glass-panel:hover {
+        transform:
+            perspective(1000px)
+            rotateX(1deg)
+            translateY(-2px);
+
+        border-color:
+            rgba(150, 165, 255, 0.26);
+    }
+
+
+    /* ======================================================
+       UPLOAD AREA
+       ====================================================== */
+
+    [data-testid="stFileUploader"] {
+        background:
+            rgba(10, 15, 32, 0.72);
+        border-radius: 18px;
+        padding: 8px;
+        border: 1px dashed rgba(130, 145, 255, 0.28);
+    }
+
+    [data-testid="stFileUploaderDropzone"] {
+        background:
+            linear-gradient(
+                145deg,
+                rgba(22, 30, 62, 0.80),
+                rgba(10, 14, 30, 0.85)
+            ) !important;
+
+        border-radius: 16px !important;
+    }
+
+
+    /* ======================================================
+       IMAGE CONTAINER
+       ====================================================== */
+
+    .image-frame {
+        padding: 8px;
+        border-radius: 22px;
+
+        background:
+            linear-gradient(
+                135deg,
+                rgba(130, 145, 255, 0.20),
+                rgba(180, 100, 255, 0.08)
+            );
+
+        box-shadow:
+            0 20px 60px rgba(0,0,0,0.40);
+    }
+
+
+    /* ======================================================
+       RESULT CARDS
+       ====================================================== */
+
+    .result-card {
+        position: relative;
+        overflow: hidden;
+
+        min-height: 145px;
+
+        padding: 18px;
+
+        border-radius: 19px;
+
+        background:
+            linear-gradient(
+                145deg,
+                rgba(24, 32, 67, 0.86),
+                rgba(11, 15, 34, 0.88)
+            );
+
+        border: 1px solid rgba(145, 160, 255, 0.13);
+
+        box-shadow:
+            0 12px 35px rgba(0,0,0,0.22);
+
+        transition:
+            transform 0.22s ease,
+            border-color 0.22s ease,
+            box-shadow 0.22s ease;
+    }
+
+    .result-card:hover {
+        transform:
+            perspective(800px)
+            rotateX(2deg)
+            translateY(-4px);
+
+        border-color:
+            rgba(150, 170, 255, 0.30);
+
+        box-shadow:
+            0 20px 45px rgba(0,0,0,0.32);
+    }
+
+    .result-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+
+        background:
+            linear-gradient(
+                180deg,
+                #788aff,
+                #bb8cff
+            );
+
+        opacity: 0.75;
+    }
+
+    .result-label {
+        color: #7f8caf;
+        font-size: 0.68rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+    }
+
+    .result-value {
+        color: #f5f6ff;
+        font-size: 1.13rem;
+        font-weight: 800;
+        margin-top: 10px;
+    }
+
+    .result-score {
+        color: #9ca9d4;
+        font-size: 0.78rem;
+        margin-top: 8px;
+    }
+
+    .score-track {
+        height: 5px;
+        width: 100%;
+
+        margin-top: 11px;
+
+        border-radius: 99px;
+
+        background: rgba(255,255,255,0.07);
+        overflow: hidden;
+    }
+
+    .score-fill {
+        height: 100%;
+
+        border-radius: 99px;
+
+        background:
+            linear-gradient(
+                90deg,
+                #6f82ff,
+                #b58cff
+            );
+    }
+
+
+    /* ======================================================
+       STATUS BADGES
+       ====================================================== */
+
+    .status-detected {
+        display: inline-block;
+
+        padding: 4px 9px;
+
+        border-radius: 999px;
+
+        background: rgba(91, 116, 255, 0.14);
+        border: 1px solid rgba(115, 135, 255, 0.25);
+
+        color: #b9c5ff;
+
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .status-negative {
+        display: inline-block;
+
+        padding: 4px 9px;
+
+        border-radius: 999px;
+
+        background: rgba(100, 110, 140, 0.10);
+        border: 1px solid rgba(130, 140, 165, 0.18);
+
+        color: #8f99b5;
+
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+
+    /* ======================================================
+       PIPELINE
+       ====================================================== */
+
+    .pipeline-grid {
+        display: grid;
+
+        grid-template-columns:
+            1fr
+            auto
+            1fr
+            auto
+            1fr
+            auto
+            1fr;
+
+        align-items: center;
+
+        gap: 10px;
+
+        margin-top: 12px;
+    }
+
+    .pipeline-box {
+        min-height: 125px;
+
+        display: flex;
+        flex-direction: column;
+
+        justify-content: center;
+        align-items: center;
+
+        text-align: center;
+
+        padding: 18px;
+
+        border-radius: 19px;
+
+        background:
+            linear-gradient(
+                145deg,
+                rgba(23, 31, 64, 0.85),
+                rgba(9, 13, 29, 0.88)
+            );
+
+        border: 1px solid rgba(140, 155, 255, 0.13);
+
+        box-shadow:
+            0 15px 35px rgba(0,0,0,0.22);
+    }
+
+    .pipeline-icon {
+        font-size: 1.8rem;
+        margin-bottom: 10px;
+    }
+
+    .pipeline-title {
+        color: #edf0ff;
+        font-weight: 800;
+        font-size: 0.92rem;
+    }
+
+    .pipeline-desc {
+        color: #7e89aa;
+        font-size: 0.70rem;
+        margin-top: 6px;
+    }
+
+    .pipeline-arrow {
+        color: #7584bd;
+        font-size: 1.45rem;
+        font-weight: 800;
+    }
+
+
+    /* ======================================================
+       MODEL INFORMATION
+       ====================================================== */
+
+    .metric-card {
+        padding: 20px;
+
+        border-radius: 18px;
+
+        background:
+            rgba(15, 21, 43, 0.78);
+
+        border: 1px solid rgba(145,160,255,0.12);
+
+        text-align: center;
+    }
+
+    .metric-label {
+        color: #7581a4;
+        font-size: 0.67rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+    }
+
+    .metric-value {
+        color: #f1f3ff;
+        font-size: 1.35rem;
+        font-weight: 850;
+        margin-top: 7px;
+    }
+
+
+    /* ======================================================
+       RESEARCH NOTE
+       ====================================================== */
+
+    .research-note {
+        padding: 22px;
+
+        border-radius: 20px;
+
+        background:
+            linear-gradient(
+                135deg,
+                rgba(35, 40, 82, 0.55),
+                rgba(12, 16, 35, 0.70)
+            );
+
+        border: 1px solid rgba(145, 160, 255, 0.13);
+
+        color: #9da8c5;
+
+        line-height: 1.7;
+    }
+
+    .research-note strong {
+        color: #dfe4ff;
+    }
+
+
+    /* ======================================================
+       BUTTON
+       ====================================================== */
+
+    .stButton > button {
+        min-height: 52px;
+
+        border-radius: 14px !important;
+
+        border: 1px solid rgba(150,165,255,0.30) !important;
+
+        background:
+            linear-gradient(
+                135deg,
+                #596df5,
+                #8b5de8
+            ) !important;
+
+        color: white !important;
+
+        font-weight: 800 !important;
+
+        letter-spacing: 0.06em;
+
+        box-shadow:
+            0 12px 30px rgba(87, 93, 220, 0.28);
+
+        transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-2px);
+
+        box-shadow:
+            0 18px 38px rgba(87, 93, 220, 0.38);
+    }
+
+
+    /* ======================================================
+       FOOTER
+       ====================================================== */
+
+    .footer {
+        margin-top: 55px;
+
+        padding-top: 20px;
+
+        border-top:
+            1px solid rgba(120,135,180,0.10);
+
+        text-align: center;
+
+        color: #59627d;
+
+        font-size: 0.72rem;
+
+        letter-spacing: 0.08em;
+    }
+
+
+    /* ======================================================
+       MOBILE
+       ====================================================== */
+
+    @media (max-width: 900px) {
+
+        .pipeline-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .pipeline-arrow {
+            transform: rotate(90deg);
+            text-align: center;
+        }
+
+        .hero-wrapper {
+            padding: 30px 25px;
+        }
+
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
 # LOAD MODEL
 # ============================================================
 
-@st.cache_resource
-def load_model():
+@st.cache_resource(show_spinner=False)
+def get_model():
+    return load_model()
 
-    device = torch.device(
-        "cuda"
-        if torch.cuda.is_available()
-        else "cpu"
-    )
-
-
-    src_path = os.path.join(
-        BASE_DIR,
-        "src"
-    )
-
-
-    if src_path not in sys.path:
-
-        sys.path.insert(
-            0,
-            src_path
-        )
-
-
-    from models import CustomCNN
-
-
-    model = CustomCNN(
-        num_classes=4
-    )
-
-
-    checkpoint = torch.load(
-        MODEL_PATH,
-        map_location=device
-    )
-
-
-    if (
-        isinstance(checkpoint, dict)
-        and
-        "model_state_dict" in checkpoint
-    ):
-
-        model.load_state_dict(
-            checkpoint["model_state_dict"]
-        )
-
-    else:
-
-        model.load_state_dict(
-            checkpoint
-        )
-
-
-    model = model.to(
-        device
-    )
-
-
-    model.eval()
-
-
-    return model, device
-
-
-# ============================================================
-# LOAD THRESHOLDS
-# ============================================================
-
-@st.cache_data
-def load_thresholds():
-
-    with open(
-        THRESHOLD_PATH,
-        "r"
-    ) as file:
-
-        data = json.load(file)
-
-
-    thresholds = {}
-
-
-    for target in TARGETS:
-
-        value = data[target]
-
-
-        if isinstance(
-            value,
-            dict
-        ):
-
-            thresholds[target] = float(
-                value["threshold"]
-            )
-
-        else:
-
-            thresholds[target] = float(
-                value
-            )
-
-
-    return thresholds
-
-
-# ============================================================
-# PREPROCESSING
-# ============================================================
-
-transform = transforms.Compose([
-
-    transforms.Resize(
-        (IMAGE_SIZE, IMAGE_SIZE)
-    ),
-
-    transforms.ToTensor(),
-
-    transforms.Normalize(
-        mean=[0.5, 0.5, 0.5],
-        std=[0.5, 0.5, 0.5]
-    )
-])
-
-
-# ============================================================
-# LOAD MODEL + THRESHOLDS
-# ============================================================
 
 try:
-
-    model, device = load_model()
-
-    thresholds = load_thresholds()
-
-except Exception as e:
-
+    model = get_model()
+except Exception as error:
     st.error(
-        f"Unable to load Model 1: {e}"
+        "Unable to load the GALAXAI model."
     )
-
+    st.exception(error)
     st.stop()
 
 
+info = model_info()
+
+
 # ============================================================
-# HEADER
+# HERO
 # ============================================================
 
-st.title(
-    "🌌 GalaxAI"
+st.html(
+    """
+    <div class="hero-wrapper">
+
+        <div class="hero-kicker">
+            Hubble Space Telescope · Deep Learning Research
+        </div>
+
+        <div class="hero-title">
+            GALAXAI
+        </div>
+
+        <div class="hero-subtitle">
+            Deep Learning-Based Multi-Attribute Galaxy Morphology
+            Analysis Using Hubble Space Telescope Images.
+            Analyze multiple visual structures of a galaxy through
+            a single CNN-based inference pipeline.
+        </div>
+
+        <div class="hero-tag">
+            MULTI-TASK CNN · 10 MORPHOLOGY ATTRIBUTES
+        </div>
+
+    </div>
+    """
 )
 
 
-st.subheader(
-    "AI-Powered Multi-Attribute Galaxy Morphology Analysis"
-)
-
-
-st.write(
-    "Deep learning analysis of Hubble Space Telescope "
-    "galaxy images using a Custom Convolutional Neural Network."
-)
-
-
 # ============================================================
-# MODEL STATUS
+# INPUT SECTION
 # ============================================================
 
-if device.type == "cuda":
+st.html(
+    """
+    <div class="section-kicker">
+        INPUT
+    </div>
 
-    gpu_name = torch.cuda.get_device_name(0)
-
-    st.success(
-        f"⚡ Model Ready • GPU Accelerated • {gpu_name}"
-    )
-
-else:
-
-    st.warning(
-        "Model Ready • Running on CPU"
-    )
-
-
-# ============================================================
-# PROJECT INFORMATION
-# ============================================================
-
-with st.expander(
-    "🔬 About this system",
-    expanded=False
-):
-
-    st.write(
-        "**Dataset:** Galaxy Zoo: Hubble"
-    )
-
-    st.write(
-        "**Architecture:** Custom CNN"
-    )
-
-    st.write(
-        "**Input:** Galaxy image"
-    )
-
-    st.write(
-        "**Outputs:** Four independent morphological attributes"
-    )
-
-    st.write(
-        "**Inference device:** "
-        +
-        (
-            "NVIDIA GPU"
-            if device.type == "cuda"
-            else "CPU"
-        )
-    )
-
-
-# ============================================================
-# UPLOAD
-# ============================================================
-
-st.divider()
-
-
-st.header(
-    "🔭 Analyze a Galaxy"
-)
-
-
-st.write(
-    "Upload a JPG or PNG image and let the Custom CNN "
-    "analyze its morphology."
+    <div class="section-title">
+        Galaxy Observation
+    </div>
+    """
 )
 
 
 uploaded_file = st.file_uploader(
-    "Choose a galaxy image",
+    "Upload a galaxy image",
     type=[
         "jpg",
         "jpeg",
-        "png"
-    ]
+        "png",
+        "webp",
+    ],
+    label_visibility="collapsed",
 )
 
 
-# ============================================================
-# IMAGE UPLOADED
-# ============================================================
+if uploaded_file is None:
 
-if uploaded_file is not None:
+    st.html(
+        """
+        <div class="glass-panel">
 
-    image = Image.open(
-        uploaded_file
-    ).convert("RGB")
+            <div style="
+                text-align:center;
+                padding:30px 10px;
+            ">
 
+                <div style="
+                    font-size:3rem;
+                    margin-bottom:15px;
+                ">
+                    🌌
+                </div>
 
-    st.divider()
+                <div style="
+                    color:#e9edff;
+                    font-size:1.15rem;
+                    font-weight:800;
+                ">
+                    Upload a Galaxy Image
+                </div>
 
+                <div style="
+                    color:#7885a7;
+                    margin-top:8px;
+                    font-size:0.85rem;
+                ">
+                    JPG, PNG or WEBP · The model will
+                    automatically preprocess the image
+                    to 224 × 224 RGB.
+                </div>
 
-    # ========================================================
-    # IMAGE + CONTROL
-    # ========================================================
+            </div>
 
-    image_col, control_col = st.columns(
-        [1.25, 1]
+        </div>
+        """
     )
 
 
-    # --------------------------------------------------------
-    # GALAXY IMAGE
-    # --------------------------------------------------------
+else:
+
+    image = Image.open(uploaded_file)
+
+    # Convert for consistent display/inference
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    # ========================================================
+    # INPUT / ANALYSIS COLUMNS
+    # ========================================================
+
+    image_col, control_col = st.columns(
+        [1.35, 1],
+        gap="large",
+    )
+
+    # ========================================================
+    # IMAGE
+    # ========================================================
 
     with image_col:
 
-        st.subheader(
-            "🛰️ Galaxy Image"
+        st.html(
+            """
+            <div class="section-kicker">
+                OBSERVATION
+            </div>
+
+            <div class="section-title">
+                Uploaded Galaxy
+            </div>
+            """
         )
 
+        st.html(
+            '<div class="image-frame">'
+        )
 
         st.image(
             image,
-            use_container_width=True
+            use_container_width=True,
         )
 
+        st.html(
+            '</div>'
+        )
 
         st.caption(
-            f"Original image: "
-            f"{image.width} × "
-            f"{image.height} pixels"
+            f"Original image · "
+            f"{image.width} × {image.height} px · "
+            f"{image.mode}"
         )
 
-
-    # --------------------------------------------------------
+    # ========================================================
     # ANALYSIS CONTROL
-    # --------------------------------------------------------
+    # ========================================================
 
     with control_col:
 
-        st.subheader(
-            "🧠 AI Analysis"
+        st.html(
+            """
+            <div class="section-kicker">
+                INFERENCE ENGINE
+            </div>
+
+            <div class="section-title">
+                Run Morphology Analysis
+            </div>
+
+            <div class="glass-panel">
+
+                <div style="
+                    color:#a2acc8;
+                    line-height:1.7;
+                    font-size:0.88rem;
+                    margin-bottom:20px;
+                ">
+
+                    GALAXAI preprocesses the uploaded image
+                    and passes it through the trained
+                    Custom CNN V2.
+
+                    <br><br>
+
+                    The network independently evaluates
+                    <b style="color:#e4e8ff;">
+                    10 morphological attributes
+                    </b>
+                    across binary and multiclass tasks.
+
+                </div>
+
+            </div>
+            """
         )
-
-
-        st.write(
-            "The Custom CNN evaluates four "
-            "morphological attributes independently."
-        )
-
-
-        st.info(
-            "Each attribute uses its own "
-            "validation-derived decision threshold."
-        )
-
 
         analyze = st.button(
-            "🔬 ANALYZE GALAXY",
-            type="primary",
-            use_container_width=True
+            "🚀  ANALYZE GALAXY",
+            use_container_width=True,
         )
 
 
     # ========================================================
-    # PREDICTION
+    # RUN INFERENCE
     # ========================================================
 
     if analyze:
 
         with st.spinner(
-            "Analyzing galaxy morphology..."
+            "Extracting learned morphological features..."
         ):
 
-            input_tensor = transform(
-                image
-            ).unsqueeze(0)
+            results = predict(
+                image,
+                model,
+            )
+
+        st.session_state["results"] = results
 
 
-            input_tensor = input_tensor.to(
-                device
+# ============================================================
+# RESULTS
+# ============================================================
+
+if "results" in st.session_state:
+
+    results = st.session_state["results"]
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    st.html(
+        """
+        <div class="section-kicker">
+            MODEL OUTPUT
+        </div>
+
+        <div class="section-title">
+            Galaxy Morphology Profile
+        </div>
+        """
+    )
+
+
+    # ========================================================
+    # BINARY TASKS
+    # ========================================================
+
+    binary_order = [
+        "featured",
+        "edge_on",
+        "bar",
+        "spiral_arms",
+        "disturbed",
+        "merger",
+        "clumpy",
+        "symmetry",
+    ]
+
+    cols = st.columns(
+        4,
+        gap="medium",
+    )
+
+    for index, task in enumerate(
+        binary_order
+    ):
+
+        result = results[task]
+
+        score = result["score"]
+
+        status = (
+            "DETECTED"
+            if result["detected"]
+            else "NOT DETECTED"
+        )
+
+        status_class = (
+            "status-detected"
+            if result["detected"]
+            else "status-negative"
+        )
+
+        with cols[index % 4]:
+
+            st.html(
+                f"""
+                <div class="result-card">
+
+                    <div class="result-label">
+                        {result["label"]}
+                    </div>
+
+                    <div style="margin-top:9px;">
+                        <span class="{status_class}">
+                            {status}
+                        </span>
+                    </div>
+
+                    <div class="result-score">
+                        Model score · {score:.3f}
+                    </div>
+
+                    <div class="score-track">
+                        <div
+                            class="score-fill"
+                            style="width:{score * 100:.1f}%"
+                        ></div>
+                    </div>
+
+                </div>
+                """
             )
 
 
-            with torch.no_grad():
-
-                outputs = model(
-                    input_tensor
-                )
-
-
-                probabilities = torch.sigmoid(
-                    outputs
-                )[0].cpu().numpy()
-
-
-        # ====================================================
-        # MORPHOLOGY RESULTS
-        # ====================================================
-
-        st.divider()
-
-
-        st.header(
-            "🧬 Morphology Analysis"
-        )
-
-
-        st.write(
-            "Four independent morphology predictions "
-            "generated by Model 1."
-        )
-
-
-        for i, target in enumerate(TARGETS):
-
-            probability = float(
-                probabilities[i]
-            )
-
-
-            threshold = thresholds[target]
-
-
-            prediction = (
-                probability >= threshold
-            )
-
-
-            # ------------------------------------------------
-            # LABEL
-            # ------------------------------------------------
-
-            if target == "smooth_featured":
-
-                label = (
-                    "FEATURED"
-                    if prediction
-                    else "SMOOTH"
-                )
-
-            else:
-
-                label = (
-                    "YES"
-                    if prediction
-                    else "NO"
-                )
-
-
-            # ------------------------------------------------
-            # RESULT CONTAINER
-            # ------------------------------------------------
-
-            with st.container(
-                border=True
-            ):
-
-                result_col1, result_col2 = st.columns(
-                    [2, 1]
-                )
-
-
-                with result_col1:
-
-                    st.subheader(
-                        f"{ICONS[target]} "
-                        f"{DISPLAY_NAMES[target]}"
-                    )
-
-
-                    if label in [
-                        "YES",
-                        "FEATURED"
-                    ]:
-
-                        st.success(
-                            f"Prediction: {label}"
-                        )
-
-                    else:
-
-                        st.info(
-                            f"Prediction: {label}"
-                        )
-
-
-                with result_col2:
-
-                    st.metric(
-                        "Model score",
-                        f"{probability * 100:.1f}%"
-                    )
-
-
-                st.progress(
-                    min(
-                        probability,
-                        1.0
-                    )
-                )
-
-
-                st.caption(
-                    f"Decision threshold: "
-                    f"{threshold:.2f}"
-                )
-
-
-        # ====================================================
-        # INTERPRETATION
-        # ====================================================
-
-        st.divider()
-
-
-        st.subheader(
-            "ℹ️ How to interpret the results"
-        )
-
-
-        st.info(
-            "The four morphology attributes are evaluated "
-            "independently. Their scores should NOT be compared "
-            "against each other. Each attribute has its own "
-            "validation-derived decision threshold."
-        )
-
-
-        # ====================================================
-        # ANALYSIS SUMMARY
-        # ====================================================
-
-        st.divider()
-
-
-        st.header(
-            "🔬 Analysis Summary"
-        )
-
-
-        st.write(
-            "Final morphological profile predicted by the "
-            "Custom CNN."
-        )
-
-
-        summary_cols = st.columns(4)
-
-
-        for i, target in enumerate(TARGETS):
-
-            probability = float(
-                probabilities[i]
-            )
-
-
-            threshold = thresholds[target]
-
-
-            prediction = (
-                probability >= threshold
-            )
-
-
-            if target == "smooth_featured":
-
-                label = (
-                    "FEATURED"
-                    if prediction
-                    else "SMOOTH"
-                )
-
-            else:
-
-                label = (
-                    "YES"
-                    if prediction
-                    else "NO"
-                )
-
-
-            with summary_cols[i]:
-
-                st.metric(
-
-                    label=(
-                        f"{ICONS[target]} "
-                        f"{DISPLAY_NAMES[target]}"
-                    ),
-
-                    value=label,
-
-                    delta=(
-                        f"{probability * 100:.1f}% score"
-                    )
-                )
-
-
-        # ====================================================
-        # MODEL PERFORMANCE
-        # ====================================================
-
-        st.divider()
-
-
-        st.header(
-            "📊 Model 1 Performance"
-        )
-
-
-        st.markdown(
-            """
-            <div class="performance-note">
-
-            Performance of the Custom CNN on the final
-            untouched TEST set. The decision thresholds were
-            selected exclusively using the VALIDATION set.
+    # ========================================================
+    # MULTICLASS
+    # ========================================================
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    multi_col1, multi_col2 = st.columns(
+        2,
+        gap="medium",
+    )
+
+    # --------------------------------------------------------
+    # BULGE
+    # --------------------------------------------------------
+
+    bulge = results["bulge"]
+
+    with multi_col1:
+
+        st.html(
+            f"""
+            <div class="result-card">
+
+                <div class="result-label">
+                    Bulge Prominence
+                </div>
+
+                <div class="result-value">
+                    {bulge["prediction"]}
+                </div>
+
+                <div class="result-score">
+                    Predicted class score ·
+                    {bulge["score"]:.3f}
+                </div>
+
+                <div class="score-track">
+                    <div
+                        class="score-fill"
+                        style="width:{bulge["score"] * 100:.1f}%"
+                    ></div>
+                </div>
 
             </div>
-            """,
-            unsafe_allow_html=True
+            """
         )
 
 
-        # ====================================================
-        # OVERALL PERFORMANCE
-        # ====================================================
+    # --------------------------------------------------------
+    # ROUNDEDNESS
+    # --------------------------------------------------------
 
-        st.subheader(
-            "🏆 Overall Test Performance"
+    rounded = results["roundedness"]
+
+    with multi_col2:
+
+        st.html(
+            f"""
+            <div class="result-card">
+
+                <div class="result-label">
+                    Roundedness
+                </div>
+
+                <div class="result-value">
+                    {rounded["prediction"]}
+                </div>
+
+                <div class="result-score">
+                    Predicted class score ·
+                    {rounded["score"]:.3f}
+                </div>
+
+                <div class="score-track">
+                    <div
+                        class="score-fill"
+                        style="width:{rounded["score"] * 100:.1f}%"
+                    ></div>
+                </div>
+
+            </div>
+            """
         )
-
-
-        overall_cols = st.columns(4)
-
-
-        with overall_cols[0]:
-
-            st.metric(
-                "Average Accuracy",
-                f"{OVERALL_METRICS['accuracy'] * 100:.2f}%"
-            )
-
-
-        with overall_cols[1]:
-
-            st.metric(
-                "Average Precision",
-                f"{OVERALL_METRICS['precision'] * 100:.2f}%"
-            )
-
-
-        with overall_cols[2]:
-
-            st.metric(
-                "Average Recall",
-                f"{OVERALL_METRICS['recall'] * 100:.2f}%"
-            )
-
-
-        with overall_cols[3]:
-
-            st.metric(
-                "Average F1-score",
-                f"{OVERALL_METRICS['f1'] * 100:.2f}%"
-            )
-
-
-        # ====================================================
-        # PER-MORPHOLOGY PERFORMANCE
-        # ====================================================
-
-        st.subheader(
-            "🎯 Performance by Morphology"
-        )
-
-
-        performance_table = pd.DataFrame({
-
-            "Morphology": [
-                DISPLAY_NAMES[target]
-                for target in TARGETS
-            ],
-
-            "Accuracy": [
-                f"{FINAL_METRICS[target]['accuracy'] * 100:.2f}%"
-                for target in TARGETS
-            ],
-
-            "Precision": [
-                f"{FINAL_METRICS[target]['precision'] * 100:.2f}%"
-                for target in TARGETS
-            ],
-
-            "Recall": [
-                f"{FINAL_METRICS[target]['recall'] * 100:.2f}%"
-                for target in TARGETS
-            ],
-
-            "F1-score": [
-                f"{FINAL_METRICS[target]['f1'] * 100:.2f}%"
-                for target in TARGETS
-            ],
-
-            "ROC-AUC": [
-                f"{FINAL_METRICS[target]['roc_auc']:.4f}"
-                for target in TARGETS
-            ],
-
-            "PR-AUC": [
-                f"{FINAL_METRICS[target]['pr_auc']:.4f}"
-                for target in TARGETS
-            ]
-        })
-
-
-        st.dataframe(
-            performance_table,
-            hide_index=True,
-            use_container_width=True
-        )
-
-
-        # ====================================================
-        # CONFUSION MATRICES
-        # ====================================================
-
-        st.subheader(
-            "🧩 Confusion Matrices"
-        )
-
-
-        st.caption(
-            "Rows represent actual classes and columns represent "
-            "predicted classes."
-        )
-
-
-        cm_cols = st.columns(2)
-
-
-        for index, target in enumerate(TARGETS):
-
-            matrix = FINAL_CONFUSION_MATRICES[
-                target
-            ]
-
-
-            if target == "smooth_featured":
-
-                class_labels = [
-                    "SMOOTH",
-                    "FEATURED"
-                ]
-
-            else:
-
-                class_labels = [
-                    "NO",
-                    "YES"
-                ]
-
-
-            cm_df = pd.DataFrame(
-
-                matrix,
-
-                index=[
-                    f"Actual {class_labels[0]}",
-                    f"Actual {class_labels[1]}"
-                ],
-
-                columns=[
-                    f"Predicted {class_labels[0]}",
-                    f"Predicted {class_labels[1]}"
-                ]
-            )
-
-
-            with cm_cols[index % 2]:
-
-                st.markdown(
-                    f"### {ICONS[target]} "
-                    f"{DISPLAY_NAMES[target]}"
-                )
-
-
-                st.dataframe(
-                    cm_df,
-                    use_container_width=True
-                )
-
-
-                st.caption(
-                    f"Accuracy: "
-                    f"{FINAL_METRICS[target]['accuracy'] * 100:.2f}%"
-                    f"  •  "
-                    f"Precision: "
-                    f"{FINAL_METRICS[target]['precision'] * 100:.2f}%"
-                    f"  •  "
-                    f"Recall: "
-                    f"{FINAL_METRICS[target]['recall'] * 100:.2f}%"
-                )
-
-
-        # ====================================================
-        # ADDITIONAL METRICS
-        # ====================================================
-
-        with st.expander(
-            "📈 View ROC-AUC, PR-AUC and F1-score"
-        ):
-
-            additional_table = pd.DataFrame({
-
-                "Morphology": [
-                    DISPLAY_NAMES[target]
-                    for target in TARGETS
-                ],
-
-                "F1-score": [
-                    f"{FINAL_METRICS[target]['f1']:.4f}"
-                    for target in TARGETS
-                ],
-
-                "ROC-AUC": [
-                    f"{FINAL_METRICS[target]['roc_auc']:.4f}"
-                    for target in TARGETS
-                ],
-
-                "PR-AUC": [
-                    f"{FINAL_METRICS[target]['pr_auc']:.4f}"
-                    for target in TARGETS
-                ]
-            })
-
-
-            st.dataframe(
-                additional_table,
-                hide_index=True,
-                use_container_width=True
-            )
-
-
-        # ====================================================
-        # THRESHOLD INFORMATION
-        # ====================================================
-
-        with st.expander(
-            "⚙️ View decision thresholds"
-        ):
-
-            threshold_table = pd.DataFrame({
-
-                "Morphology": [
-                    DISPLAY_NAMES[target]
-                    for target in TARGETS
-                ],
-
-                "Validation-derived threshold": [
-                    f"{thresholds[target]:.2f}"
-                    for target in TARGETS
-                ]
-            })
-
-
-            st.dataframe(
-                threshold_table,
-                hide_index=True,
-                use_container_width=True
-            )
 
 
 # ============================================================
-# ABOUT GALAXAI
+# PIPELINE
 # ============================================================
 
-st.divider()
+st.markdown("<br>", unsafe_allow_html=True)
 
+st.html(
+    """
+    <div class="section-kicker">
+        INFERENCE PIPELINE
+    </div>
 
-st.header(
-    "🔬 About GalaxAI"
+    <div class="section-title">
+        How GALAXAI Analyzes the Galaxy
+    </div>
+
+    <div class="pipeline-grid">
+
+        <div class="pipeline-box">
+
+            <div class="pipeline-icon">
+                🌌
+            </div>
+
+            <div class="pipeline-title">
+                Galaxy Image
+            </div>
+
+            <div class="pipeline-desc">
+                Uploaded observation
+            </div>
+
+        </div>
+
+        <div class="pipeline-arrow">
+            →
+        </div>
+
+        <div class="pipeline-box">
+
+            <div class="pipeline-icon">
+                ⚙️
+            </div>
+
+            <div class="pipeline-title">
+                Preprocessing
+            </div>
+
+            <div class="pipeline-desc">
+                224 × 224 · RGB · Normalize
+            </div>
+
+        </div>
+
+        <div class="pipeline-arrow">
+            →
+        </div>
+
+        <div class="pipeline-box">
+
+            <div class="pipeline-icon">
+                🧠
+            </div>
+
+            <div class="pipeline-title">
+                CNN Feature Extraction
+            </div>
+
+            <div class="pipeline-desc">
+                Learned visual patterns
+            </div>
+
+        </div>
+
+        <div class="pipeline-arrow">
+            →
+        </div>
+
+        <div class="pipeline-box">
+
+            <div class="pipeline-icon">
+                🔭
+            </div>
+
+            <div class="pipeline-title">
+                Morphology Profile
+            </div>
+
+            <div class="pipeline-desc">
+                10 independent tasks
+            </div>
+
+        </div>
+
+    </div>
+    """
 )
 
 
-about_col1, about_col2, about_col3 = st.columns(3)
+# ============================================================
+# MODEL INFORMATION
+# ============================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.html(
+    """
+    <div class="section-kicker">
+        SYSTEM
+    </div>
+
+    <div class="section-title">
+        Model Information
+    </div>
+    """
+)
+
+m1, m2, m3, m4 = st.columns(
+    4,
+    gap="medium",
+)
+
+with m1:
+
+    st.html(
+        f"""
+        <div class="metric-card">
+
+            <div class="metric-label">
+                Architecture
+            </div>
+
+            <div class="metric-value">
+                Custom CNN V2
+            </div>
+
+        </div>
+        """
+    )
+
+with m2:
+
+    st.html(
+        f"""
+        <div class="metric-card">
+
+            <div class="metric-label">
+                Parameters
+            </div>
+
+            <div class="metric-value">
+                {info["parameters"]:,}
+            </div>
+
+        </div>
+        """
+    )
+
+with m3:
+
+    st.html(
+        """
+        <div class="metric-card">
+
+            <div class="metric-label">
+                Morphology Tasks
+            </div>
+
+            <div class="metric-value">
+                10
+            </div>
+
+        </div>
+        """
+    )
+
+with m4:
+
+    st.html(
+        """
+        <div class="metric-card">
+
+            <div class="metric-label">
+                Input Resolution
+            </div>
+
+            <div class="metric-value">
+                224 × 224
+            </div>
+
+        </div>
+        """
+    )
 
 
-with about_col1:
+# ============================================================
+# RESEARCH NOTE
+# ============================================================
 
-    with st.container(
-        border=True
-    ):
+st.markdown("<br>", unsafe_allow_html=True)
 
-        st.subheader(
-            "🛰️ Dataset"
-        )
+st.html(
+    """
+    <div class="research-note">
 
-        st.write(
-            "Galaxy Zoo: Hubble"
-        )
+        <strong>Research interpretation</strong>
 
-        st.caption(
-            "Hubble Space Telescope galaxy imagery"
-        )
+        <br><br>
 
+        GALAXAI performs multi-task galaxy morphology analysis.
+        Each morphological attribute is evaluated using its
+        corresponding learned prediction head.
 
-with about_col2:
+        <br><br>
 
-    with st.container(
-        border=True
-    ):
+        Binary attributes are reported as detected or not detected,
+        together with the model's output score.
 
-        st.subheader(
-            "🧠 Architecture"
-        )
+        Bulge Prominence and Roundedness are multiclass predictions
+        and are reported using their predicted morphological category.
 
-        st.write(
-            "Custom Convolutional Neural Network"
-        )
+        <br><br>
 
-        st.caption(
-            "Four independent morphology outputs"
-        )
+        <strong>Important:</strong>
+        displayed model scores should not be interpreted as
+        calibrated probabilities or scientific certainty.
 
-
-with about_col3:
-
-    with st.container(
-        border=True
-    ):
-
-        st.subheader(
-            "⚡ Inference"
-        )
-
-        st.write(
-            "NVIDIA RTX 4050 Laptop GPU"
-        )
-
-        st.caption(
-            "224 × 224 model input"
-        )
+    </div>
+    """
+)
 
 
 # ============================================================
 # FOOTER
 # ============================================================
 
-st.divider()
+st.html(
+    """
+    <div class="footer">
 
+        GALAXAI · Deep Learning-Based Multi-Attribute
+        Galaxy Morphology Analysis
 
-st.caption(
-    "🌌 GalaxAI • Model 1: Custom CNN • "
-    "Galaxy Zoo: Hubble • GPU Accelerated"
+        <br><br>
+
+        Research Prototype · Custom CNN V2
+
+    </div>
+    """
 )

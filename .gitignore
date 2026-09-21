@@ -1,60 +1,41 @@
-# ============================================
-# GALAXAI GITIGNORE
-# ============================================
-
-# Dataset
-data/gzh/
-data/raw/
-data/processed/
-
-# Dataset files
-*.csv
-*.csv.gz
-*.parquet
-*.tar
-*.tar.gz
-*.zip
-*.7z
-
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
 
 # Virtual environment
 .venv/
 venv/
 env/
 
-# Jupyter
-.ipynb_checkpoints/
-
-# Machine Learning Models
-*.pt
-*.pth
-*.h5
-*.hdf5
-*.keras
-*.onnx
-*.pkl
-*.joblib
-
-# Logs
-logs/
-checkpoints/
-wandb/
-mlruns/
-
 # IDE
 .vscode/
 .idea/
 
+# Jupyter
+.ipynb_checkpoints/
+
 # OS
 .DS_Store
 Thumbs.db
-desktop.ini
+
+# Python cache
+*.pyc
+
+# Large dataset
+data/gzh/images/
+data/gzh/*.parquet
+
+# Local generated files
+*.log
+
+# Secrets
+.env
+.env.*
 
 # Temporary files
 *.tmp
 *.temp
-*.bak
-*.swp
+
+# Large dataset archives
+data/gzh/*.tar.gz
