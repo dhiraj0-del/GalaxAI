@@ -22,7 +22,8 @@
           17,
           774
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\featured_confusion_matrix.png"
     },
     "edge_on": {
       "samples": 10342,
@@ -44,7 +45,8 @@
           56,
           1155
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\edge_on_confusion_matrix.png"
     },
     "bar": {
       "samples": 10016,
@@ -66,7 +68,8 @@
           125,
           265
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\bar_confusion_matrix.png"
     },
     "spiral_arms": {
       "samples": 8964,
@@ -88,7 +91,8 @@
           426,
           1128
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\spiral_arms_confusion_matrix.png"
     },
     "disturbed": {
       "samples": 8588,
@@ -110,7 +114,8 @@
           63,
           91
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\disturbed_confusion_matrix.png"
     },
     "merger": {
       "samples": 8677,
@@ -132,7 +137,8 @@
           45,
           91
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\merger_confusion_matrix.png"
     },
     "clumpy": {
       "samples": 7336,
@@ -154,7 +160,8 @@
           241,
           1500
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\clumpy_confusion_matrix.png"
     },
     "symmetry": {
       "samples": 7204,
@@ -176,7 +183,8 @@
           676,
           2462
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\symmetry_confusion_matrix.png"
     }
   },
   "multiclass": {
@@ -218,7 +226,8 @@
           32,
           194
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\bulge_confusion_matrix.png"
     },
     "roundedness": {
       "samples": 8250,
@@ -248,12 +257,16 @@
           34,
           1735
         ]
-      ]
+      ],
+      "confusion_matrix_plot": "results\\model1_v2\\roundedness_confusion_matrix.png"
     }
   },
   "summary": {
     "binary_macro_f1": 0.526236198622763,
     "multiclass_macro_f1": 0.7362501713742811,
-    "overall_macro_task_f1": 0.5682389931730667
+    "overall_macro_task_f1": 0.5682389931730667,
+    "overall_accuracy": 0.8341065672207825,
+    "overall_correct_predictions": 65982,
+    "overall_valid_predictions": 79105
   }
 }
