@@ -79,3 +79,51 @@
     8 logits                         4 logits       3 logits
 
                          TOTAL = 15 LOGITS
+
+
+
+
+
+                         Tensor Size Progression
+The feature-map progression through the network is:
+
+Input
+224 × 224 × 3
+
+        ↓
+
+Block 1
+112 × 112 × 32
+
+        ↓
+
+Block 2
+56 × 56 × 64
+
+        ↓
+
+Block 3
+28 × 28 × 128
+
+        ↓
+
+Block 4
+14 × 14 × 256
+
+        ↓
+
+Adaptive Average Pooling
+
+1 × 1 × 256
+
+        ↓
+
+Flatten
+
+256 features
+
+        ↓
+
+Fully Connected Layer
+
+256 features
