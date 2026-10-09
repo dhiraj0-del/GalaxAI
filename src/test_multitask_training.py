@@ -24,9 +24,9 @@ def main():
 
     print(f"Device: {device}")
 
-    # ---------------------------------------------------------
+
     # Load a small subset
-    # ---------------------------------------------------------
+
 
     df = pd.read_csv(
         "results/multitask_train.csv"
@@ -58,9 +58,9 @@ def main():
     for task, value in masks.items():
         print(f"  {task:15s}: {tuple(value.shape)}")
 
-    # ---------------------------------------------------------
+   
     # Move targets/masks to GPU
-    # ---------------------------------------------------------
+
 
     targets = {
         k: v.to(device)
@@ -72,9 +72,9 @@ def main():
         for k, v in masks.items()
     }
 
-    # ---------------------------------------------------------
+ 
     # Model
-    # ---------------------------------------------------------
+
 
     model = GalaxyCNNV2().to(device)
 
@@ -84,9 +84,9 @@ def main():
     for task, value in outputs.items():
         print(f"  {task:15s}: {tuple(value.shape)}")
 
-    # ---------------------------------------------------------
+  
     # Loss
-    # ---------------------------------------------------------
+ 
 
     pos_weights = {
         task: 1.0
@@ -114,9 +114,9 @@ def main():
         f"\nTotal loss: {total_loss.item():.6f}"
     )
 
-    # ---------------------------------------------------------
+ 
     # Backward pass
-    # ---------------------------------------------------------
+
 
     total_loss.backward()
 

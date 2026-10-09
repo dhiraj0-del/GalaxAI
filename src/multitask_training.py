@@ -64,9 +64,9 @@ class GalaxyMultiTaskDataset(Dataset):
         targets = {}
         masks = {}
 
-        # -------------------------------
+        
         # Binary targets
-        # -------------------------------
+        
 
         for task in BINARY_TASKS:
 
@@ -80,9 +80,9 @@ class GalaxyMultiTaskDataset(Dataset):
                 dtype=torch.float32,
             )
 
-        # -------------------------------
+        
         # Multi-class targets
-        # -------------------------------
+        
 
         for task in MULTICLASS_TASKS:
 

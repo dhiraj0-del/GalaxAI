@@ -2,9 +2,9 @@ import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-# ============================================================
+
 # CONFIG
-# ============================================================
+
 
 CATALOG_PATH = "data/gzh/hubble_ortho_train_catalog.parquet"
 IMAGE_ROOT = "data/gzh/images"
@@ -19,9 +19,9 @@ RANDOM_STATE = 42
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-# ============================================================
+
 # LOAD CATALOG
-# ============================================================
+
 
 print("=" * 75)
 print("GALAXAI — MULTI-TASK DATASET PREPARATION")
@@ -34,9 +34,9 @@ print(f"Confidence threshold: {THRESHOLD:.0%}")
 print()
 
 
-# ============================================================
+
 # IMAGE PATH
-# ============================================================
+
 
 df["image_path"] = df["filename"].apply(
     lambda x: os.path.join(IMAGE_ROOT, x)
@@ -52,9 +52,9 @@ print(f"Rows with valid images: {len(df):,}")
 print()
 
 
-# ============================================================
+
 # HELPER FUNCTIONS
-# ============================================================
+
 
 def binary_target(df, yes_col, no_col):
     """
@@ -119,9 +119,9 @@ def multiclass_target(df, columns):
     return target, mask
 
 
-# ============================================================
+
 # 1. SMOOTH / FEATURED
-# ============================================================
+
 
 df["featured"], df["featured_mask"] = binary_target(
     df,
@@ -130,9 +130,9 @@ df["featured"], df["featured_mask"] = binary_target(
 )
 
 
-# ============================================================
+
 # 2. EDGE-ON
-# ============================================================
+
 
 df["edge_on"], df["edge_on_mask"] = binary_target(
     df,
@@ -141,9 +141,9 @@ df["edge_on"], df["edge_on_mask"] = binary_target(
 )
 
 
-# ============================================================
+
 # 3. BAR
-# ============================================================
+
 
 df["bar"], df["bar_mask"] = binary_target(
     df,
@@ -152,9 +152,9 @@ df["bar"], df["bar_mask"] = binary_target(
 )
 
 
-# ============================================================
+
 # 4. SPIRAL ARMS
-# ============================================================
+
 
 df["spiral_arms"], df["spiral_arms_mask"] = binary_target(
     df,
@@ -163,9 +163,9 @@ df["spiral_arms"], df["spiral_arms_mask"] = binary_target(
 )
 
 
-# ============================================================
+
 # 5. BULGE PROMINENCE — 4 CLASS
-# ============================================================
+
 
 bulge_columns = [
     "bulge-size-hubble_none_fraction",
@@ -180,9 +180,9 @@ df["bulge"], df["bulge_mask"] = multiclass_target(
 )
 
 
-# ============================================================
+
 # 6. ROUNDEDNESS — 3 CLASS
-# ============================================================
+
 
 round_columns = [
     "how-rounded-hubble_completely_fraction",
@@ -196,7 +196,7 @@ df["roundedness"], df["roundedness_mask"] = multiclass_target(
 )
 
 
-# ============================================================
+
 # 7 & 8. DISTURBED / MERGER
 #
 # These belong to the GZH odd-feature branch.
@@ -205,7 +205,7 @@ df["roundedness"], df["roundedness_mask"] = multiclass_target(
 #   - positive when the corresponding fraction >= 70%
 #   - negative only when GZH explicitly indicated NO odd feature
 #   - otherwise ambiguous
-# ============================================================
+
 
 disturbed_fraction = df[
     "t08_odd_feature_a03_disturbed_fraction"
@@ -267,9 +267,9 @@ df.loc[
 ] = 1
 
 
-# ============================================================
+
 # 9. CLUMPY APPEARANCE
-# ============================================================
+
 
 df["clumpy"], df["clumpy_mask"] = binary_target(
     df,
@@ -278,11 +278,11 @@ df["clumpy"], df["clumpy_mask"] = binary_target(
 )
 
 
-# ============================================================
+
 # 10. GALAXY SYMMETRY
 #
 # This is the GZH galaxy symmetry question.
-# ============================================================
+
 
 df["symmetry"], df["symmetry_mask"] = binary_target(
     df,
@@ -291,9 +291,9 @@ df["symmetry"], df["symmetry_mask"] = binary_target(
 )
 
 
-# ============================================================
+
 # SELECT OUTPUT COLUMNS
-# ============================================================
+
 
 output_columns = [
     "filename",
@@ -327,9 +327,9 @@ output_columns = [
 dataset = df[output_columns].copy()
 
 
-# ============================================================
+
 # DATASET SUMMARY
-# ============================================================
+
 
 targets = [
     "featured",
@@ -381,9 +381,9 @@ for target in targets:
         print(f"  Negative  : {negatives:,}")
 
 
-# ============================================================
+
 # SAVE COMPLETE DATASET
-# ============================================================
+
 
 full_path = os.path.join(
     OUTPUT_DIR,
@@ -397,12 +397,12 @@ print(f"Saved complete dataset:")
 print(f"  {full_path}")
 
 
-# ============================================================
+
 # TRAIN / VALIDATION / TEST SPLIT
 #
 # We split images, not individual task labels.
 # Random seed guarantees reproducibility.
-# ============================================================
+
 
 train_df, temp_df = train_test_split(
     dataset,
@@ -417,9 +417,9 @@ val_df, test_df = train_test_split(
 )
 
 
-# ============================================================
+
 # SAVE SPLITS
-# ============================================================
+
 
 train_path = os.path.join(
     OUTPUT_DIR,
@@ -441,9 +441,9 @@ val_df.to_csv(val_path, index=False)
 test_df.to_csv(test_path, index=False)
 
 
-# ============================================================
+
 # FINAL SUMMARY
-# ============================================================
+
 
 print()
 print("=" * 75)

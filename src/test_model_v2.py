@@ -22,9 +22,9 @@ def main():
 
     model.eval()
 
-    # ---------------------------------------------------------
+   
     # Parameter count
-    # ---------------------------------------------------------
+
 
     total_params = sum(
         p.numel()
@@ -40,9 +40,9 @@ def main():
     print(f"\nTotal parameters:     {total_params:,}")
     print(f"Trainable parameters: {trainable_params:,}")
 
-    # ---------------------------------------------------------
+
     # Test input
-    # ---------------------------------------------------------
+
 
     x = torch.randn(
         4,
@@ -54,9 +54,9 @@ def main():
 
     print(f"\nInput shape: {tuple(x.shape)}")
 
-    # ---------------------------------------------------------
+  
     # Forward pass
-    # ---------------------------------------------------------
+
 
     with torch.no_grad():
 
@@ -88,9 +88,9 @@ def main():
             f"{'PASS' if tuple(output.shape) == expected else 'FAIL'}"
         )
 
-    # ---------------------------------------------------------
+    
     # Total logits
-    # ---------------------------------------------------------
+   
 
     total_logits = sum(
         output.shape[1] if output.ndim == 2 else 1
@@ -100,9 +100,8 @@ def main():
     print(f"\nTotal morphology tasks: 10")
     print(f"Total output logits:    {total_logits}")
 
-    # ---------------------------------------------------------
     # Final validation
-    # ---------------------------------------------------------
+
 
     assert len(outputs) == 10
 

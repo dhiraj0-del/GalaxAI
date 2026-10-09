@@ -24,9 +24,9 @@ from multitask_training import (
 from models import GalaxyCNNV2
 
 
-# ============================================================
+
 # CONFIGURATION
-# ============================================================
+
 
 TRAIN_CSV = Path("results/multitask_train.csv")
 VAL_CSV = Path("results/multitask_validation.csv")
@@ -67,11 +67,6 @@ MULTICLASS_TASKS = {
     "roundedness": 3,
 }
 
-
-# ============================================================
-# REPRODUCIBILITY
-# ============================================================
-
 SEED = 42
 
 torch.manual_seed(SEED)
@@ -80,10 +75,6 @@ np.random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
-
-# ============================================================
-# WEIGHTED LOSS
-# ============================================================
 
 class WeightedMaskedMultiTaskLoss(nn.Module):
 
@@ -119,9 +110,7 @@ class WeightedMaskedMultiTaskLoss(nn.Module):
 
         task_losses = {}
 
-        # ----------------------------------------------------
-        # BINARY TASKS
-        # ----------------------------------------------------
+        
 
         for task in BINARY_TASKS:
 

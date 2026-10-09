@@ -56,9 +56,9 @@ class GalaxyCNNV2(nn.Module):
     def __init__(self):
         super().__init__()
 
-        # =====================================================
+        
         # SHARED CNN BACKBONE
-        # =====================================================
+        
 
         self.features = nn.Sequential(
             ConvBlock(3, 32),
@@ -67,9 +67,9 @@ class GalaxyCNNV2(nn.Module):
             ConvBlock(128, 256),
         )
 
-        # =====================================================
+        
         # SHARED GALAXY REPRESENTATION
-        # =====================================================
+        
 
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
 
@@ -83,9 +83,9 @@ class GalaxyCNNV2(nn.Module):
             nn.Dropout(0.40),
         )
 
-        # =====================================================
+        
         # BINARY MORPHOLOGY HEADS
-        # =====================================================
+        
 
         self.featured_head = nn.Linear(256, 1)
 
@@ -103,9 +103,9 @@ class GalaxyCNNV2(nn.Module):
 
         self.symmetry_head = nn.Linear(256, 1)
 
-        # =====================================================
+        
         # MULTI-CLASS MORPHOLOGY HEADS
-        # =====================================================
+        
 
         # Bulge:
         # 0 = None
@@ -134,9 +134,9 @@ class GalaxyCNNV2(nn.Module):
         # Shared feature vector
         x = self.shared(x)
 
-        # =====================================================
+        
         # OUTPUTS
-        # =====================================================
+        
 
         outputs = {
             "featured": self.featured_head(x).squeeze(1),
