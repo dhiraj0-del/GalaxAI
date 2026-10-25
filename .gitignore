@@ -39,3 +39,11 @@ data/gzh/*.parquet
 
 # Large dataset archives
 data/gzh/*.tar.gz
+
+
+# GALAXAI model checkpoints
+models/*/checkpoints/
+checkpoints/
+*.pth
+*.pt
+*.ckpt

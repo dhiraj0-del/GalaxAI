@@ -1,0 +1,275 @@
+{
+  "model": "MobileNetV3-Large",
+  "checkpoint": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\checkpoints\\galaxai_model3_mobilenetv3_large_best.pth",
+  "checkpoint_epoch": 3,
+  "best_validation_loss": 5.842302034456263,
+  "test_samples": 12095,
+  "binary": {
+    "featured": {
+      "samples": 4254,
+      "positive_samples": 791,
+      "negative_samples": 3463,
+      "accuracy": 0.9922425952045134,
+      "balanced_accuracy": 0.986456245233611,
+      "precision": 0.9809644670050761,
+      "recall": 0.97724399494311,
+      "f1": 0.9791006966434452,
+      "roc_auc": 0.9995681272823451,
+      "pr_auc": 0.9981907427369987,
+      "confusion_matrix": [
+        [
+          3448,
+          15
+        ],
+        [
+          18,
+          773
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\featured_confusion_matrix.png"
+    },
+    "edge_on": {
+      "samples": 10342,
+      "positive_samples": 1211,
+      "negative_samples": 9131,
+      "accuracy": 0.9579385031908721,
+      "balanced_accuracy": 0.9489626675346035,
+      "precision": 0.7597054886211513,
+      "recall": 0.9372419488026424,
+      "f1": 0.8391866913123844,
+      "roc_auc": 0.9883419076455819,
+      "pr_auc": 0.9475239469023886,
+      "confusion_matrix": [
+        [
+          8772,
+          359
+        ],
+        [
+          76,
+          1135
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\edge_on_confusion_matrix.png"
+    },
+    "bar": {
+      "samples": 10016,
+      "positive_samples": 390,
+      "negative_samples": 9626,
+      "accuracy": 0.8691094249201278,
+      "balanced_accuracy": 0.8101224248429734,
+      "precision": 0.1936127744510978,
+      "recall": 0.7461538461538462,
+      "f1": 0.3074484944532488,
+      "roc_auc": 0.8937526304293394,
+      "pr_auc": 0.44199839419552445,
+      "confusion_matrix": [
+        [
+          8414,
+          1212
+        ],
+        [
+          99,
+          291
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\bar_confusion_matrix.png"
+    },
+    "spiral_arms": {
+      "samples": 8964,
+      "positive_samples": 1554,
+      "negative_samples": 7410,
+      "accuracy": 0.892458723784025,
+      "balanced_accuracy": 0.8482453535085114,
+      "precision": 0.6606753812636166,
+      "recall": 0.7805662805662805,
+      "f1": 0.7156342182890856,
+      "roc_auc": 0.9226628160838687,
+      "pr_auc": 0.820131626531316,
+      "confusion_matrix": [
+        [
+          6787,
+          623
+        ],
+        [
+          341,
+          1213
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\spiral_arms_confusion_matrix.png"
+    },
+    "disturbed": {
+      "samples": 8588,
+      "positive_samples": 154,
+      "negative_samples": 8434,
+      "accuracy": 0.7996040987424313,
+      "balanced_accuracy": 0.6429749406391569,
+      "precision": 0.04314868804664723,
+      "recall": 0.4805194805194805,
+      "f1": 0.07918673087212413,
+      "roc_auc": 0.7308713340252349,
+      "pr_auc": 0.044803107517887214,
+      "confusion_matrix": [
+        [
+          6793,
+          1641
+        ],
+        [
+          80,
+          74
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\disturbed_confusion_matrix.png"
+    },
+    "merger": {
+      "samples": 8677,
+      "positive_samples": 136,
+      "negative_samples": 8541,
+      "accuracy": 0.9768353117436902,
+      "balanced_accuracy": 0.767539532497228,
+      "precision": 0.3488372093023256,
+      "recall": 0.5514705882352942,
+      "f1": 0.42735042735042733,
+      "roc_auc": 0.8971311390731214,
+      "pr_auc": 0.47372575213030693,
+      "confusion_matrix": [
+        [
+          8401,
+          140
+        ],
+        [
+          61,
+          75
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\merger_confusion_matrix.png"
+    },
+    "clumpy": {
+      "samples": 7336,
+      "positive_samples": 1741,
+      "negative_samples": 5595,
+      "accuracy": 0.8964013086150491,
+      "balanced_accuracy": 0.8741192672747217,
+      "precision": 0.7561357702349869,
+      "recall": 0.8317059161401493,
+      "f1": 0.7921225382932167,
+      "roc_auc": 0.9494979670759206,
+      "pr_auc": 0.8950049116158952,
+      "confusion_matrix": [
+        [
+          5128,
+          467
+        ],
+        [
+          293,
+          1448
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\clumpy_confusion_matrix.png"
+    },
+    "symmetry": {
+      "samples": 7204,
+      "positive_samples": 3138,
+      "negative_samples": 4066,
+      "accuracy": 0.7903942254303165,
+      "balanced_accuracy": 0.7983854357216822,
+      "precision": 0.7158006362672322,
+      "recall": 0.8604206500956023,
+      "f1": 0.7814761215629522,
+      "roc_auc": 0.8760591649510295,
+      "pr_auc": 0.8278118565803314,
+      "confusion_matrix": [
+        [
+          2994,
+          1072
+        ],
+        [
+          438,
+          2700
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\symmetry_confusion_matrix.png"
+    }
+  },
+  "multiclass": {
+    "bulge": {
+      "samples": 5474,
+      "accuracy": 0.7990500548045305,
+      "balanced_accuracy": 0.7553011205548308,
+      "macro_precision": 0.6986832524627711,
+      "macro_recall": 0.7553011205548308,
+      "macro_f1": 0.7221494537562658,
+      "per_class_f1": [
+        0.8808001311690441,
+        0.7067407922168172,
+        0.7310243183492999,
+        0.5700325732899023
+      ],
+      "confusion_matrix": [
+        [
+          2686,
+          371,
+          28,
+          84
+        ],
+        [
+          182,
+          1017,
+          143,
+          57
+        ],
+        [
+          35,
+          77,
+          496,
+          42
+        ],
+        [
+          27,
+          14,
+          40,
+          175
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\bulge_confusion_matrix.png"
+    },
+    "roundedness": {
+      "samples": 8250,
+      "accuracy": 0.9437575757575758,
+      "balanced_accuracy": 0.9404984031791227,
+      "macro_precision": 0.9312789746908331,
+      "macro_recall": 0.9404984031791227,
+      "macro_f1": 0.9357189566451605,
+      "per_class_f1": [
+        0.8926195755464048,
+        0.9542242703533026,
+        0.9603130240357741
+      ],
+      "confusion_matrix": [
+        [
+          1409,
+          126,
+          8
+        ],
+        [
+          196,
+          4659,
+          65
+        ],
+        [
+          9,
+          60,
+          1718
+        ]
+      ],
+      "confusion_matrix_plot": "D:\\Dhiraj\\GalaxAI\\models\\model3_mobilenet\\results\\roundedness_confusion_matrix.png"
+    }
+  },
+  "summary": {
+    "binary_macro_f1": 0.6151882398471106,
+    "multiclass_macro_f1": 0.8289342052007131,
+    "overall_macro_task_f1": 0.6579374329178311,
+    "overall_accuracy": 0.8925605208267493,
+    "overall_correct_predictions": 70606,
+    "overall_valid_predictions": 79105
+  }
+}
