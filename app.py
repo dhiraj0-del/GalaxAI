@@ -1,3283 +1,1583 @@
-import streamlit as st
-from PIL import Image
+
 from pathlib import Path
+import importlib.util
+import json
+import sys
 
-from src.inference import load_model, predict, model_info
-
+import pandas as pd
+import streamlit as st
+import torch
+from PIL import Image
+from torchvision import transforms
 
 # ============================================================
-# PATHS
+# GALAXAI — Galaxy Morphology Research Laboratory
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
+SRC_DIR = BASE_DIR / "src"
 
-LOSS_GRAPH = BASE_DIR / "results" / "model1_v2_loss_curve.png"
-CONFUSION_DIR = BASE_DIR / "results" / "model1_v2"
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
-
-# ============================================================
-# PAGE CONFIGURATION
-# ============================================================
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 st.set_page_config(
-    page_title="GALAXAI — Galaxy Morphology",
+    page_title="GALAXAI | Galaxy Morphology",
     page_icon="🌌",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
-
 # ============================================================
-# CUSTOM CSS
+# SPACE-THEMED DESIGN
 # ============================================================
 
-st.markdown(
-    """
+st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
 
-html, body {
-    font-family: "Inter", sans-serif;
+:root {
+    --cyan: #72efff;
+    --violet: #a18aff;
+    --text: #eef3ff;
+    --muted: #b4c2e3;
+    --line: rgba(130,164,255,.25);
 }
 
-[data-testid="stAppViewContainer"] {
+.stApp {
+    color: var(--text);
     background:
-        radial-gradient(
-            circle at 15% 10%,
-            rgba(72, 88, 190, 0.20),
-            transparent 30%
-        ),
-        radial-gradient(
-            circle at 85% 75%,
-            rgba(130, 60, 190, 0.17),
-            transparent 32%
-        ),
-        #03050d !important;
-
-    color: #eef1ff;
+        radial-gradient(ellipse at 15% 5%, rgba(49,69,155,.38), transparent 35%),
+        radial-gradient(ellipse at 85% 20%, rgba(87,39,139,.26), transparent 32%),
+        radial-gradient(ellipse at 50% 95%, rgba(14,77,110,.22), transparent 42%),
+        #050711;
+    background-attachment: fixed;
 }
 
-[data-testid="stAppViewContainer"] {
-    overflow-x: hidden;
-}
-
-[data-testid="stHeader"] {
-    background: transparent !important;
-}
-
-[data-testid="stToolbar"] {
-    visibility: hidden;
-}
-
-#MainMenu {
-    visibility: hidden;
-}
-
-footer {
-    visibility: hidden;
-}
-
-.block-container {
-    max-width: 1450px;
-    padding-top: 1.5rem;
-    padding-bottom: 4rem;
-}
-
-
-/* ============================================================
-   STAR BACKGROUND
-   ============================================================ */
-
-[data-testid="stAppViewContainer"]::before {
+.stApp:before {
     content: "";
     position: fixed;
     inset: 0;
-
     pointer-events: none;
-
-    opacity: 0.55;
-
-    background-image:
-        radial-gradient(
-            circle,
-            rgba(255,255,255,0.65) 1px,
-            transparent 1px
-        ),
-        radial-gradient(
-            circle,
-            rgba(160,180,255,0.35) 1px,
-            transparent 1px
-        );
-
-    background-size:
-        110px 110px,
-        170px 170px;
-
-    background-position:
-        0 0,
-        40px 70px;
-
-    animation: starMove 35s linear infinite;
-
     z-index: 0;
+    opacity: .35;
+    background-image:
+        radial-gradient(1px 1px at 7% 18%, #fff 99%, transparent),
+        radial-gradient(1px 1px at 24% 78%, #9eeaff 99%, transparent),
+        radial-gradient(2px 2px at 44% 32%, #fff 99%, transparent),
+        radial-gradient(1px 1px at 66% 14%, #fff 99%, transparent),
+        radial-gradient(1px 1px at 83% 61%, #b7b3ff 99%, transparent),
+        radial-gradient(1px 1px at 92% 28%, #fff 99%, transparent);
+    background-size: 310px 240px;
+    animation: star-drift 85s linear infinite;
 }
 
-@keyframes starMove {
-    from {
-        transform: translate3d(0, 0, 0);
-    }
-
-    to {
-        transform: translate3d(-80px, 100px, 0);
-    }
+@keyframes star-drift {
+    from { background-position: 0 0; }
+    to { background-position: 260px 180px; }
 }
 
+@keyframes rise-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
-/* ============================================================
-   HERO
-   ============================================================ */
+@keyframes planet-pulse {
+    0%, 100% { transform: scale(1); opacity: .48; }
+    50% { transform: scale(1.045); opacity: .72; }
+}
 
-.hero-wrapper {
+.block-container {
+    max-width: 1500px;
+    padding-top: 1.3rem;
+    padding-bottom: 3rem;
+    position: relative;
+    z-index: 1;
+}
+
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, rgba(10,15,34,.98), rgba(7,9,21,.98));
+    border-right: 1px solid var(--line);
+}
+
+section[data-testid="stSidebar"] * {
+    color: #e7edff;
+}
+
+.hero {
     position: relative;
     overflow: hidden;
-
-    padding: 48px;
-
-    border-radius: 30px;
-
-    margin-bottom: 30px;
-
+    min-height: 300px;
+    padding: 2.4rem 2.5rem;
+    border: 1px solid rgba(123,170,255,.4);
+    border-radius: 28px;
     background:
-        radial-gradient(
-            circle at 80% 30%,
-            rgba(112,95,255,0.24),
-            transparent 30%
-        ),
-        linear-gradient(
-            135deg,
-            rgba(15,21,48,0.96),
-            rgba(7,10,25,0.94)
-        );
-
-    border: 1px solid rgba(145,160,255,0.22);
-
+        radial-gradient(ellipse at 78% 50%, rgba(72,107,218,.23), transparent 35%),
+        linear-gradient(118deg, rgba(12,22,51,.96), rgba(10,13,32,.94) 54%, rgba(36,19,67,.89));
     box-shadow:
-        0 30px 90px rgba(0,0,0,0.45),
-        inset 0 1px 0 rgba(255,255,255,0.08);
+        0 25px 65px rgba(0,0,0,.38),
+        inset 0 1px 0 rgba(255,255,255,.11),
+        0 0 38px rgba(83,119,255,.13);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    animation: rise-in .75s ease-out both;
+    margin-bottom: 1.5rem;
 }
 
-.hero-wrapper::after {
+.hero:before {
     content: "";
-
     position: absolute;
-
-    width: 280px;
-    height: 280px;
-
-    right: -80px;
-    top: -90px;
-
+    width: 230px;
+    height: 230px;
     border-radius: 50%;
-
-    background:
-        radial-gradient(
-            circle,
-            rgba(125,140,255,0.20),
-            rgba(70,40,150,0.08),
-            transparent 70%
-        );
-
-    filter: blur(8px);
-
-    animation: pulseOrb 5s ease-in-out infinite;
+    right: 9%;
+    top: 12%;
+    background: radial-gradient(
+        circle at 32% 28%,
+        rgba(202,248,255,.9),
+        rgba(82,149,255,.58) 12%,
+        rgba(71,70,190,.4) 34%,
+        rgba(16,21,63,.08) 68%,
+        transparent 72%
+    );
+    box-shadow: 0 0 55px rgba(91,132,255,.25);
+    animation: planet-pulse 9s ease-in-out infinite;
+    pointer-events: none;
 }
 
-@keyframes pulseOrb {
-
-    0%, 100% {
-        transform: scale(0.9);
-        opacity: 0.55;
-    }
-
-    50% {
-        transform: scale(1.15);
-        opacity: 0.9;
-    }
-}
-
-.hero-kicker {
-    color: #8e9bd0;
-
-    font-size: 0.75rem;
-
+.eyebrow {
+    color: var(--cyan);
+    letter-spacing: .22em;
+    font-size: .72rem;
     font-weight: 700;
-
-    letter-spacing: 0.24em;
-
-    text-transform: uppercase;
-
-    margin-bottom: 12px;
-}
-
-.hero-title {
-    font-size: clamp(3rem, 7vw, 6rem);
-
-    line-height: 0.95;
-
-    font-weight: 900;
-
-    letter-spacing: 0.08em;
-
-    margin: 0;
-
-    background:
-        linear-gradient(
-            100deg,
-            #ffffff 0%,
-            #b9c7ff 45%,
-            #d7b8ff 75%,
-            #ffffff 100%
-        );
-
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.hero-subtitle {
-    max-width: 850px;
-
-    margin-top: 20px;
-
-    color: #a8b2cf;
-
-    font-size: 1rem;
-
-    line-height: 1.75;
-}
-
-.hero-tag {
-    display: inline-block;
-
-    margin-top: 20px;
-
-    padding: 8px 15px;
-
-    border-radius: 999px;
-
-    color: #c7d0ff;
-
-    background: rgba(115,130,255,0.10);
-
-    border: 1px solid rgba(130,145,255,0.20);
-
-    font-size: 0.72rem;
-
-    letter-spacing: 0.12em;
-
     text-transform: uppercase;
 }
 
-
-/* ============================================================
-   SECTION TITLES
-   ============================================================ */
-
-.section-kicker {
-    color: #727fa9;
-
-    font-size: 0.70rem;
-
-    font-weight: 800;
-
-    letter-spacing: 0.20em;
-
-    text-transform: uppercase;
-
-    margin-bottom: 5px;
+.hero h1 {
+    font-family: 'Orbitron', sans-serif;
+    color: #f7f8ff;
+    font-size: clamp(2.4rem, 5vw, 4.1rem);
+    letter-spacing: .04em;
+    margin: .45rem 0;
+    text-shadow: 0 0 26px rgba(114,239,255,.28);
 }
 
-.section-title {
-    color: #eef1ff;
-
-    font-size: 1.65rem;
-
-    font-weight: 800;
-
-    margin-bottom: 18px;
-}
-
-.section-description {
-    color: #7f8caf;
-
-    font-size: 0.88rem;
-
+.hero p {
+    color: #c9d4f5;
+    max-width: 950px;
+    font-size: 1.03rem;
     line-height: 1.7;
-
-    margin-bottom: 20px;
 }
 
-
-/* ============================================================
-   GLASS PANELS
-   ============================================================ */
-
-.glass-panel {
-    padding: 25px;
-
-    border-radius: 24px;
-
-    background:
-        linear-gradient(
-            145deg,
-            rgba(22,29,59,0.78),
-            rgba(8,12,28,0.82)
-        );
-
-    border: 1px solid rgba(150,165,255,0.14);
-
-    box-shadow:
-        0 22px 60px rgba(0,0,0,0.30),
-        inset 0 1px 0 rgba(255,255,255,0.05);
-
-    backdrop-filter: blur(18px);
+h1, h2, h3 {
+    font-family: 'Orbitron', 'Inter', sans-serif !important;
+    letter-spacing: .015em;
 }
 
-
-/* ============================================================
-   METRIC CARDS
-   ============================================================ */
-
-.metric-card {
-    min-height: 145px;
-
-    padding: 22px;
-
-    border-radius: 20px;
-
-    background:
-        linear-gradient(
-            145deg,
-            rgba(24,32,67,0.86),
-            rgba(11,15,34,0.88)
-        );
-
-    border: 1px solid rgba(145,160,255,0.13);
-
-    box-shadow:
-        0 14px 40px rgba(0,0,0,0.22);
-}
-
-.metric-label {
-    color: #7f8caf;
-
-    font-size: 0.68rem;
-
-    font-weight: 800;
-
-    text-transform: uppercase;
-
-    letter-spacing: 0.12em;
-}
-
-.metric-value {
-    color: #f5f6ff;
-
-    font-size: 1.7rem;
-
-    font-weight: 900;
-
-    margin-top: 10px;
-}
-
-.metric-description {
-    color: #677493;
-
-    font-size: 0.76rem;
-
-    margin-top: 7px;
-
-    line-height: 1.5;
-}
-
-
-/* ============================================================
-   RESULT CARDS
-   ============================================================ */
-
-.result-card {
-    position: relative;
-
-    overflow: hidden;
-
-    min-height: 145px;
-
-    padding: 20px;
-
-    border-radius: 19px;
-
-    background:
-        linear-gradient(
-            145deg,
-            rgba(24,32,67,0.86),
-            rgba(11,15,34,0.88)
-        );
-
-    border: 1px solid rgba(145,160,255,0.13);
-
-    box-shadow:
-        0 12px 35px rgba(0,0,0,0.22);
-
-    transition:
-        transform 0.22s ease,
-        border-color 0.22s ease;
-}
-
-.result-card:hover {
-    transform: translateY(-4px);
-
-    border-color:
-        rgba(150,170,255,0.30);
-}
-
-.result-card::before {
-    content: "";
-
-    position: absolute;
-
-    left: 0;
-
-    top: 0;
-
-    bottom: 0;
-
-    width: 3px;
-
-    background:
-        linear-gradient(
-            180deg,
-            #788aff,
-            #bb8cff
-        );
-
-    opacity: 0.75;
-}
-
-.result-label {
-    color: #7f8caf;
-
-    font-size: 0.68rem;
-
-    font-weight: 800;
-
-    text-transform: uppercase;
-
-    letter-spacing: 0.12em;
-}
-
-.result-value {
-    color: #f5f6ff;
-
-    font-size: 1.13rem;
-
-    font-weight: 800;
-
-    margin-top: 10px;
-}
-
-.result-score {
-    color: #9ca9d4;
-
-    font-size: 0.78rem;
-
-    margin-top: 8px;
-}
-
-.status-detected {
-    display: inline-block;
-
-    color: #c7d5ff;
-
-    background: rgba(86,110,255,0.14);
-
-    border: 1px solid rgba(100,120,255,0.24);
-
-    border-radius: 999px;
-
-    padding: 5px 10px;
-
-    font-size: 0.66rem;
-
-    font-weight: 800;
-
-    letter-spacing: 0.08em;
-}
-
-.status-negative {
-    display: inline-block;
-
-    color: #8994b3;
-
-    background: rgba(120,130,160,0.08);
-
-    border: 1px solid rgba(120,130,160,0.14);
-
-    border-radius: 999px;
-
-    padding: 5px 10px;
-
-    font-size: 0.66rem;
-
-    font-weight: 800;
-
-    letter-spacing: 0.08em;
-}
-
-.score-track {
-    height: 5px;
-
-    width: 100%;
-
-    margin-top: 12px;
-
-    border-radius: 99px;
-
-    background: rgba(255,255,255,0.07);
-
-    overflow: hidden;
-}
-
-.score-fill {
-    height: 100%;
-
-    border-radius: 99px;
-
-    background:
-        linear-gradient(
-            90deg,
-            #7185ff,
-            #ba8cff
-        );
-}
-
-
-/* ============================================================
-   IMAGE FRAME
-   ============================================================ */
-
-.image-frame {
-    padding: 8px;
-
-    border-radius: 22px;
-
-    background:
-        linear-gradient(
-            135deg,
-            rgba(130,145,255,0.20),
-            rgba(180,100,255,0.08)
-        );
-
-    box-shadow:
-        0 20px 60px rgba(0,0,0,0.40);
-}
-
-
-/* ============================================================
-   RESEARCH NOTE
-   ============================================================ */
-
-.research-note {
-    padding: 22px;
-
+h2 { color: #e6eaff; }
+h3 { color: #d9e5ff; }
+p, li { line-height: 1.65; }
+
+div[data-testid="stMetric"] {
+    background: linear-gradient(145deg, rgba(25,38,75,.9), rgba(10,15,34,.9));
+    border: 1px solid var(--line);
+    padding: 15px 17px;
     border-radius: 18px;
-
-    background:
-        linear-gradient(
-            135deg,
-            rgba(30,40,80,0.72),
-            rgba(10,15,32,0.80)
-        );
-
-    border: 1px solid rgba(130,145,255,0.13);
-
-    color: #8e9ab8;
-
-    font-size: 0.84rem;
-
-    line-height: 1.75;
+    box-shadow: 0 12px 28px rgba(0,0,0,.22);
+    transition: transform .22s ease, box-shadow .22s ease;
 }
 
-.research-note strong {
-    color: #dfe4ff;
+div[data-testid="stMetric"]:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 32px rgba(0,0,0,.3), 0 0 22px rgba(102,151,255,.13);
 }
 
+div[data-testid="stMetricLabel"] { color: #b6c6ee !important; }
+div[data-testid="stMetricValue"] { color: #f2f6ff !important; }
 
-/* ============================================================
-   INFO BOX
-   ============================================================ */
-
-.info-box {
-    padding: 18px;
-
-    border-radius: 16px;
-
-    background:
-        rgba(35,45,85,0.42);
-
-    border-left:
-        3px solid #788aff;
-
-    color: #8e9ab8;
-
-    font-size: 0.83rem;
-
-    line-height: 1.7;
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    border: 1px solid rgba(130,164,255,.26) !important;
+    border-radius: 20px !important;
+    background: linear-gradient(145deg, rgba(20,29,60,.72), rgba(9,13,29,.72)) !important;
+    box-shadow: 0 14px 32px rgba(0,0,0,.22);
+    transition: transform .22s ease, border-color .22s ease;
 }
 
-.info-title {
-    color: #e5e9ff;
-
-    font-size: 0.9rem;
-
-    font-weight: 800;
-
-    margin-bottom: 7px;
+div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    transform: translateY(-3px);
+    border-color: rgba(114,239,255,.5) !important;
 }
-
-
-/* ============================================================
-   TASK TAGS
-   ============================================================ */
-
-.task-tag {
-    display: inline-block;
-
-    padding: 6px 10px;
-
-    margin: 3px;
-
-    border-radius: 9px;
-
-    color: #c7d0ff;
-
-    background:
-        rgba(110,125,255,0.10);
-
-    border:
-        1px solid rgba(130,145,255,0.16);
-
-    font-size: 0.68rem;
-
-    font-weight: 700;
-}
-
-
-/* ============================================================
-   PIPELINE
-   ============================================================ */
-
-.pipeline-box {
-    padding: 22px;
-
-    border-radius: 20px;
-
-    background:
-        linear-gradient(
-            145deg,
-            rgba(24,32,67,0.82),
-            rgba(11,15,34,0.88)
-        );
-
-    border:
-        1px solid rgba(145,160,255,0.13);
-
-    text-align: center;
-
-    min-height: 150px;
-}
-
-.pipeline-icon {
-    font-size: 2rem;
-
-    margin-bottom: 10px;
-}
-
-.pipeline-title {
-    color: #e9edff;
-
-    font-size: 0.9rem;
-
-    font-weight: 800;
-}
-
-.pipeline-description {
-    color: #74809f;
-
-    font-size: 0.73rem;
-
-    margin-top: 7px;
-
-    line-height: 1.5;
-}
-
-
-/* ============================================================
-   FOOTER
-   ============================================================ */
-
-.footer {
-    text-align: center;
-
-    padding: 55px 0 20px 0;
-
-    color: #4c5878;
-
-    font-size: 0.72rem;
-
-    line-height: 1.8;
-}
-
-.divider {
-    height: 1px;
-
-    margin: 45px 0;
-
-    background:
-        linear-gradient(
-            90deg,
-            transparent,
-            rgba(148,163,184,0.16),
-            transparent
-        );
-}
-
-
-/* ============================================================
-   STREAMLIT BUTTON
-   ============================================================ */
 
 .stButton > button {
-    height: 52px;
-
-    border-radius: 15px;
-
-    border: 1px solid rgba(130,145,255,0.30);
-
-    background:
-        linear-gradient(
-            135deg,
-            rgba(87,105,255,0.30),
-            rgba(150,90,255,0.22)
-        );
-
-    color: #eef1ff;
-
-    font-weight: 800;
-
-    letter-spacing: 0.04em;
-
-    transition: all 0.2s ease;
+    border: 1px solid rgba(117,211,255,.45);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(43,72,133,.95), rgba(76,49,132,.95));
+    color: white;
+    font-weight: 650;
+    transition: all .2s ease;
 }
 
 .stButton > button:hover {
-    border-color:
-        rgba(160,175,255,0.55);
-
     transform: translateY(-2px);
-
-    box-shadow:
-        0 12px 35px rgba(70,80,200,0.22);
+    border-color: var(--cyan);
+    box-shadow: 0 0 18px rgba(114,239,255,.18);
+    color: white;
 }
 
-
-/* ============================================================
-   FILE UPLOADER
-   ============================================================ */
+.stProgress > div > div {
+    background: linear-gradient(90deg, #5de4ff, #9b8cff);
+}
 
 [data-testid="stFileUploader"] {
-    background:
-        rgba(10,15,32,0.72);
-
+    border: 1px dashed rgba(120,191,255,.48);
     border-radius: 18px;
-
-    padding: 8px;
-
-    border:
-        1px dashed rgba(130,145,255,0.28);
+    padding: .55rem;
+    background: rgba(13,21,46,.45);
 }
 
-[data-testid="stFileUploaderDropzone"] {
-    background:
-        linear-gradient(
-            145deg,
-            rgba(22,30,62,0.80),
-            rgba(10,14,30,0.85)
-        ) !important;
-
-    border-radius: 16px !important;
+.stAlert {
+    border-radius: 14px;
 }
 
-
-/* ============================================================
-   DATAFRAME / TABLE
-   ============================================================ */
-
-table {
-    color: #dce2ff !important;
+.stMarkdown code {
+    color: #bcefff !important;
+    background: rgba(76,108,168,.18) !important;
+    border-radius: 5px;
 }
 
+.arch-flow {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    margin: 1rem 0;
+}
 
-/* ============================================================
-   MOBILE
-   ============================================================ */
+.arch-node {
+    flex: 1;
+    min-width: 0;
+    padding: 15px 13px;
+    border-radius: 15px;
+    border: 1px solid rgba(115,181,255,.32);
+    background: linear-gradient(145deg, rgba(36,53,101,.72), rgba(11,18,40,.86));
+    transition: transform .24s ease, border-color .24s ease;
+}
 
-@media (max-width: 800px) {
+.arch-node:hover {
+    transform: translateY(-4px);
+    border-color: var(--cyan);
+}
 
-    .hero-wrapper {
-        padding: 30px 24px;
+.arch-node span {
+    color: var(--cyan);
+    font-size: .68rem;
+    letter-spacing: .14em;
+    font-weight: 800;
+}
+
+.arch-node b {
+    color: #f2f6ff;
+    display: block;
+    margin: 7px 0;
+}
+
+.arch-node small {
+    color: #afc0e5;
+    line-height: 1.45;
+}
+
+@media (max-width: 850px) {
+    .hero { padding: 1.6rem; min-height: 240px; }
+    .hero:before { width: 125px; height: 125px; right: 6%; opacity: .3; }
+    .arch-flow { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *:before, *:after {
+        animation: none !important;
+        transition: none !important;
     }
-
-    .hero-title {
-        font-size: 3rem;
-    }
-
-    .glass-panel {
-        padding: 18px;
-    }
-
 }
-
 </style>
-""",
-    unsafe_allow_html=True,
-)
 
-
-# ============================================================
-# LOAD MODEL
-# ============================================================
-
-@st.cache_resource(show_spinner=False)
-def get_model():
-    return load_model()
-
-
-try:
-    model = get_model()
-    info = model_info()
-
-except Exception as error:
-
-    st.error("Unable to load the GALAXAI model.")
-    st.exception(error)
-    st.stop()
-
+<div class="hero">
+  <div class="eyebrow">HUBBLE SPACE TELESCOPE · MULTI-TASK AI RESEARCH</div>
+  <h1>✦ GALAXAI</h1>
+  <p>
+    <b>Explore the hidden morphology of galaxies.</b>
+    A deep-learning research laboratory comparing a custom CNN,
+    ResNet-18 and MobileNetV3-Large on ten galaxy morphology attributes.
+    Upload an image, inspect model predictions, explore the architectures,
+    and compare the held-out test evaluation.
+  </p>
+</div>
+""", unsafe_allow_html=True)
 
 # ============================================================
-# HERO
+# TASKS, LABELS AND MODEL FILES
 # ============================================================
 
-st.html(
-    """
-    <div class="hero-wrapper">
+BINARY = [
+    "featured", "edge_on", "bar", "spiral_arms",
+    "disturbed", "merger", "clumpy", "symmetry",
+]
 
-        <div class="hero-kicker">
-            Hubble Space Telescope · Deep Learning Research
-        </div>
+MULTI = ["bulge", "roundedness"]
+TASKS = BINARY + MULTI
 
-        <div class="hero-title">
-            GALAXAI
-        </div>
+LABELS = {
+    "featured": "Featured",
+    "edge_on": "Edge-on",
+    "bar": "Bar",
+    "spiral_arms": "Spiral arms",
+    "disturbed": "Disturbed",
+    "merger": "Merger",
+    "clumpy": "Clumpy",
+    "symmetry": "Symmetry",
+    "bulge": "Bulge prominence",
+    "roundedness": "Roundedness",
+}
 
-        <div class="hero-subtitle">
-            Deep Learning-Based Multi-Attribute Galaxy Morphology
-            Analysis Using Hubble Space Telescope Images.
-            Analyze multiple visual structures of a galaxy through
-            a single CNN-based inference pipeline.
-        </div>
+CLASSES = {
+    "bulge": ["None", "Just noticeable", "Obvious", "Dominant"],
+    "roundedness": [
+        "Completely rounded",
+        "In-between",
+        "Cigar-shaped",
+    ],
+}
 
-        <div class="hero-tag">
-            MULTI-TASK CNN · 10 MORPHOLOGY ATTRIBUTES
-        </div>
+MODELS = {
+    "Model 1 — Custom CNN V2": {
+        "architecture": "Custom CNN V2",
+        "description": (
+            "Four convolutional blocks with 32, 64, 128 and 256 channels, "
+            "adaptive average pooling, and a shared 256-unit head."
+        ),
+        "metrics": [
+            BASE_DIR / "models/model1_custom_cnn/results/test_metrics.json",
+            BASE_DIR / "results/model1_v2/test_metrics.json",
+        ],
+        "heatmaps": BASE_DIR / "models/model1_custom_cnn/results",
+        "best_epoch": 27,
+        "parameters": "1,242,863",
+        "checkpoint": BASE_DIR / "checkpoints/galaxai_model1_v2_best.pth",
+        "module_path": BASE_DIR / "src/models.py",
+        "class_name": "GalaxyCNNV2",
+    },
+    "Model 2 — ResNet-18": {
+        "architecture": "ImageNet-pretrained ResNet-18",
+        "description": (
+            "ResNet-18 backbone producing 512 features, a shared 256-unit "
+            "head, and ten task-specific prediction heads."
+        ),
+        "metrics": [
+            BASE_DIR / "models/model2_resnet/results/test_metrics.json",
+            BASE_DIR / "results/model2_resnet/test_metrics.json",
+        ],
+        "heatmaps": BASE_DIR / "models/model2_resnet/results",
+        "best_epoch": 2,
+        "parameters": "See model definition",
+        "checkpoint": (
+            BASE_DIR / "models/model2_resnet/checkpoints/"
+            "galaxai_model2_resnet18_best.pth"
+        ),
+        "module_path": BASE_DIR / "models/model2_resnet/models.py",
+        "class_name": "GalaxyResNet18",
+    },
+    "Model 3 — MobileNetV3-Large": {
+        "architecture": "ImageNet-pretrained MobileNetV3-Large",
+        "description": (
+            "MobileNetV3-Large backbone producing 960 features, a shared "
+            "256-unit head, and ten task-specific prediction heads."
+        ),
+        "metrics": [
+            BASE_DIR / "models/model3_mobilenet/results/test_metrics.json",
+            BASE_DIR / "results/model3_mobilenet/results/test_metrics.json",
+        ],
+        "heatmaps": BASE_DIR / "models/model3_mobilenet/results",
+        "best_epoch": 3,
+        "parameters": "3,221,823",
+        "checkpoint": (
+            BASE_DIR / "models/model3_mobilenet/checkpoints/"
+            "galaxai_model3_mobilenetv3_large_best.pth"
+        ),
+        "module_path": BASE_DIR / "models/model3_mobilenet/models.py",
+        "class_name": "GalaxyMobileNetV3",
+    },
+}
 
-    </div>
-    """
-)
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+TRANSFORM = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(
+        mean=[0.5, 0.5, 0.5],
+        std=[0.5, 0.5, 0.5],
+    ),
+])
+
+
+@st.cache_data(show_spinner=False)
+def read_json(path):
+    try:
+        with Path(path).open(encoding="utf-8") as file:
+            result = json.load(file)
+        return result if isinstance(result, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def load_metrics(model_name):
+    for path in MODELS[model_name]["metrics"]:
+        if path.is_file():
+            return read_json(path), path
+    return None, None
+
+
+def fmt(value, percent=False):
+    try:
+        number = float(value)
+        return f"{number * 100:.2f}%" if percent else f"{number:.4f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def get_summary(data):
+    return data.get("summary", {}) if data else {}
 
 # ============================================================
-# INPUT SECTION
+# MODEL LOADING
 # ============================================================
 
-st.html(
-    """
-    <div class="section-kicker">
-        INPUT
-    </div>
+@st.cache_resource(show_spinner="Loading neural network...")
+def load_model(model_name):
+    config = MODELS[model_name]
+    checkpoint_path = config["checkpoint"]
+    module_path = config["module_path"]
 
-    <div class="section-title">
-        Galaxy Observation
-    </div>
-    """
-)
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(
+            f"Checkpoint not found: {checkpoint_path}"
+        )
 
+    if not module_path.is_file():
+        raise FileNotFoundError(
+            f"Model definition not found: {module_path}"
+        )
 
-uploaded_file = st.file_uploader(
-    "Upload a galaxy image",
-    type=["jpg", "jpeg", "png", "webp"],
-    label_visibility="collapsed",
-)
+    # Load the correct architecture module independently.
+    module_name = {
+        "Model 1 — Custom CNN V2": "galaxai_model1_module",
+        "Model 2 — ResNet-18": "galaxai_model2_module",
+        "Model 3 — MobileNetV3-Large": "galaxai_model3_module",
+    }[model_name]
 
-
-# ============================================================
-# NO IMAGE
-# ============================================================
-
-if uploaded_file is None:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div style="
-                text-align:center;
-                padding:35px 10px;
-            ">
-
-                <div style="
-                    font-size:3rem;
-                    margin-bottom:15px;
-                ">
-                    🌌
-                </div>
-
-                <div style="
-                    color:#e9edff;
-                    font-size:1.15rem;
-                    font-weight:800;
-                ">
-                    Upload a Galaxy Image
-                </div>
-
-                <div style="
-                    color:#7885a7;
-                    margin-top:8px;
-                    font-size:0.85rem;
-                ">
-                    JPG, PNG or WEBP · The model will automatically
-                    preprocess the image to 224 × 224 RGB.
-                </div>
-
-            </div>
-
-        </div>
-        """
+    spec = importlib.util.spec_from_file_location(
+        module_name, str(module_path)
     )
 
+    if spec is None or spec.loader is None:
+        raise ImportError(
+            f"Unable to import model definition: {module_path}"
+        )
 
-# ============================================================
-# IMAGE UPLOADED
-# ============================================================
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
 
-else:
+    model_class = getattr(module, config["class_name"], None)
 
-    image = Image.open(uploaded_file).convert("RGB")
+    if model_class is None:
+        raise AttributeError(
+            f"Class {config['class_name']} was not found in "
+            f"{module_path.name}. Check the class name in models.py."
+        )
 
-    image_col, control_col = st.columns(
-        [1.35, 1],
-        gap="large",
+    # All three architectures support pretrained=False.
+    # For inference, the trained checkpoint supplies the weights.
+    try:
+        model = model_class(pretrained=False)
+    except TypeError:
+        model = model_class()
+
+    checkpoint = torch.load(
+        checkpoint_path,
+        map_location="cpu",
+        weights_only=False,
     )
 
-
-    # ========================================================
-    # IMAGE
-    # ========================================================
-
-    with image_col:
-
-        st.html(
-            """
-            <div class="section-kicker">
-                OBSERVATION
-            </div>
-
-            <div class="section-title">
-                Uploaded Galaxy
-            </div>
-            """
+    if isinstance(checkpoint, dict):
+        state_dict = (
+            checkpoint.get("model_state_dict")
+            or checkpoint.get("state_dict")
         )
 
-        st.html(
-            """
-            <div class="image-frame">
-            """
-        )
-
-        st.image(
-            image,
-            use_container_width=True,
-        )
-
-        # Do NOT close an HTML container in another Streamlit
-        # element. This was the source of the raw HTML problem.
-        st.html(
-            """
-            </div>
-            """
-        )
-
-        st.caption(
-            f"Original image · "
-            f"{image.width} × {image.height} px · "
-            f"{image.mode}"
-        )
-
-
-    # ========================================================
-    # INFERENCE CONTROL
-    # ========================================================
-
-    with control_col:
-
-        st.html(
-            """
-            <div class="section-kicker">
-                INFERENCE ENGINE
-            </div>
-
-            <div class="section-title">
-                Run Morphology Analysis
-            </div>
-
-            <div class="glass-panel">
-
-                <div style="
-                    color:#a2acc8;
-                    line-height:1.7;
-                    font-size:0.88rem;
-                    margin-bottom:20px;
-                ">
-
-                    GALAXAI preprocesses the uploaded image
-                    and passes it through the trained
-                    Custom CNN V2.
-
-                    <br><br>
-
-                    The network independently evaluates
-
-                    <b style="color:#e4e8ff;">
-                    10 morphological attributes
-                    </b>
-
-                    across binary and multiclass tasks.
-
-                </div>
-
-            </div>
-            """
-        )
-
-        analyze = st.button(
-            "🚀  ANALYZE GALAXY",
-            use_container_width=True,
-        )
-
-
-    # ========================================================
-    # RUN INFERENCE
-    # ========================================================
-
-    if analyze:
-
-        with st.spinner(
-            "Extracting learned morphological features..."
-        ):
-
-            try:
-
-                results = predict(
-                    image,
-                    model,
+        if state_dict is None:
+            # Some checkpoints contain only the state dictionary.
+            if checkpoint and all(
+                isinstance(value, torch.Tensor)
+                for value in checkpoint.values()
+            ):
+                state_dict = checkpoint
+            else:
+                raise ValueError(
+                    f"Could not locate model_state_dict in "
+                    f"{checkpoint_path.name}."
                 )
+    else:
+        raise ValueError(
+            f"Unsupported checkpoint format: {checkpoint_path.name}"
+        )
 
-                st.session_state["results"] = results
+    # Strict loading catches architecture/checkpoint mismatches.
+    model.load_state_dict(state_dict, strict=True)
+    model.to(DEVICE)
+    model.eval()
 
-            except Exception as error:
-
-                st.error("Inference failed.")
-                st.exception(error)
+    return model
 
 
 # ============================================================
-# RESULTS
+# OUTPUT DECODING
 # ============================================================
 
-if "results" in st.session_state:
+def unpack_outputs(outputs):
+    """
+    Supports the task-output dictionary used by GalaxAI models.
+    """
+    if not isinstance(outputs, dict):
+        raise TypeError(
+            "The model must return a dictionary of task logits."
+        )
 
-    results = st.session_state["results"]
+    missing = [task for task in TASKS if task not in outputs]
 
-    st.html("<br>")
+    if missing:
+        raise ValueError(
+            "Missing model output(s): " + ", ".join(missing)
+        )
 
-    st.html(
-        """
-        <div class="section-kicker">
-            MODEL OUTPUT
-        </div>
+    return outputs
 
-        <div class="section-title">
-            Galaxy Morphology Profile
-        </div>
 
-        <div class="section-description">
-            The Custom CNN V2 evaluates eight binary morphology
-            attributes and two multiclass morphology attributes.
-        </div>
-        """
+def predict_image(model, image):
+    image = image.convert("RGB")
+    tensor = TRANSFORM(image).unsqueeze(0).to(DEVICE)
+
+    with torch.inference_mode():
+        outputs = unpack_outputs(model(tensor))
+
+    predictions = {}
+
+    for task in BINARY:
+        logits = outputs[task].reshape(-1)
+        probability = torch.sigmoid(logits)[0].item()
+
+        # Match the 0.70 decision threshold used in evaluation.
+        predictions[task] = {
+            "type": "binary",
+            "probability": probability,
+            "label": (
+                "Positive" if probability >= 0.70
+                else "Negative"
+            ),
+            "confidence": (
+                probability if probability >= 0.70
+                else 1.0 - probability
+            ),
+        }
+
+    for task in MULTI:
+        logits = outputs[task].reshape(1, -1)
+        probabilities = torch.softmax(logits, dim=1)[0]
+        index = int(probabilities.argmax().item())
+
+        predictions[task] = {
+            "type": "multiclass",
+            "label": CLASSES[task][index],
+            "class_index": index,
+            "confidence": float(probabilities[index].item()),
+            "probabilities": {
+                name: float(probabilities[i].item())
+                for i, name in enumerate(CLASSES[task])
+            },
+        }
+
+    return predictions
+
+
+# ============================================================
+# VISUAL ARCHITECTURE
+# ============================================================
+
+def architecture_flow(model_name):
+    if model_name == "Model 1 — Custom CNN V2":
+        nodes = [
+            ("01", "INPUT", "224 × 224 × 3 RGB galaxy image"),
+            ("02", "CNN BLOCKS", "3→32→64→128→256 channels; convolution, BN, ReLU and pooling"),
+            ("03", "POOLING", "Adaptive average pooling and flatten"),
+            ("04", "SHARED HEAD", "256 features, ReLU, dropout 0.40"),
+            ("05", "TASK HEADS", "8 binary outputs + bulge (4) + roundedness (3)"),
+        ]
+    elif model_name == "Model 2 — ResNet-18":
+        nodes = [
+            ("01", "INPUT", "224 × 224 × 3 RGB galaxy image"),
+            ("02", "RESNET-18", "Convolutional stem and residual layers 1–4"),
+            ("03", "FEATURES", "Global average pooling; 512 features"),
+            ("04", "SHARED HEAD", "Linear 512→256, ReLU, dropout 0.40"),
+            ("05", "TASK HEADS", "8 binary outputs + bulge (4) + roundedness (3)"),
+        ]
+    else:
+        nodes = [
+            ("01", "INPUT", "224 × 224 × 3 RGB galaxy image"),
+            ("02", "MOBILENETV3", "Large backbone with inverted residual blocks and squeeze-excitation"),
+            ("03", "FEATURES", "Backbone feature representation; 960 features"),
+            ("04", "SHARED HEAD", "Linear 960→256, ReLU, dropout 0.40"),
+            ("05", "TASK HEADS", "8 binary outputs + bulge (4) + roundedness (3)"),
+        ]
+
+    html = '<div class="arch-flow">'
+
+    for number, title, detail in nodes:
+        html += (
+            '<div class="arch-node">'
+            f'<span>{number} / PIPELINE</span>'
+            f'<b>{title}</b>'
+            f'<small>{detail}</small>'
+            '</div>'
+        )
+
+    html += "</div>"
+
+    st.markdown(html, unsafe_allow_html=True)
+
+    st.caption(
+        "All models receive the same 224×224 RGB input and produce "
+        "15 logits across ten morphology tasks. Arrows are represented "
+        "by the left-to-right pipeline order."
     )
 
 
-    # ========================================================
-    # BINARY TASKS
-    # ========================================================
+def show_architecture_details(model_name):
+    config = MODELS[model_name]
 
-    binary_order = [
-        "featured",
-        "edge_on",
-        "bar",
-        "spiral_arms",
-        "disturbed",
-        "merger",
-        "clumpy",
-        "symmetry",
+    st.subheader("Architecture blueprint")
+    architecture_flow(model_name)
+
+    st.markdown("### Design specification")
+    st.write(config["description"])
+
+    if model_name == "Model 1 — Custom CNN V2":
+        st.markdown("""
+        - Four convolutional blocks.
+        - Each block uses two 3×3 convolutions, batch normalization,
+          ReLU activation and max pooling.
+        - Channel progression: 3 → 32 → 64 → 128 → 256.
+        - Adaptive average pooling produces a compact feature vector.
+        - Shared fully connected layer: 256 → 256.
+        - Dropout probability: 0.40.
+        """)
+    elif model_name == "Model 2 — ResNet-18":
+        st.markdown("""
+        - ImageNet-pretrained ResNet-18 backbone.
+        - Residual blocks help preserve gradient flow through the network.
+        - Original 1000-class classifier is replaced by a 512-feature
+          representation and a custom shared head.
+        - Shared head: 512 → 256, ReLU, dropout 0.40.
+        - Separate heads for each binary and multiclass attribute.
+        """)
+    else:
+        st.markdown("""
+        - ImageNet-pretrained MobileNetV3-Large backbone.
+        - Efficient inverted residual blocks and lightweight convolutions.
+        - Backbone representation: 960 features.
+        - Shared head: 960 → 256, ReLU, dropout 0.40.
+        - Separate heads for each binary and multiclass attribute.
+        """)
+
+    st.markdown("### Prediction head dimensions")
+
+    head_data = [
+        {
+            "Task": LABELS[task],
+            "Output type": "Binary",
+            "Logits": 1,
+            "Decision": "Sigmoid probability; threshold 0.70",
+        }
+        for task in BINARY
     ]
 
-    binary_descriptions = {
-        "featured":
-            "Presence of featured/non-smooth morphology.",
+    head_data.extend([
+        {
+            "Task": LABELS["bulge"],
+            "Output type": "Multiclass",
+            "Logits": 4,
+            "Decision": "Softmax across four classes",
+        },
+        {
+            "Task": LABELS["roundedness"],
+            "Output type": "Multiclass",
+            "Logits": 3,
+            "Decision": "Softmax across three classes",
+        },
+    ])
 
-        "edge_on":
-            "Whether the galaxy appears edge-on.",
+    st.dataframe(
+        pd.DataFrame(head_data),
+        use_container_width=True,
+        hide_index=True,
+    )
 
-        "bar":
-            "Presence of a central bar structure.",
+    st.markdown("### Training and checkpoint")
 
-        "spiral_arms":
-            "Presence of visible spiral-arm structure.",
+    a, b, c = st.columns(3)
 
-        "disturbed":
-            "Evidence of disturbed morphology.",
+    a.metric("Best validation epoch", config["best_epoch"])
+    b.metric("Input resolution", "224 × 224")
+    c.metric("Compute device", str(DEVICE).upper())
 
-        "merger":
-            "Evidence of merger-like morphology.",
+    if config["checkpoint"].is_file():
+        st.success(
+            "Checkpoint file found: " + config["checkpoint"].name
+        )
+    else:
+        st.error(
+            "Checkpoint is missing: " + config["checkpoint"].name
+        )
 
-        "clumpy":
-            "Presence of clumpy galaxy structure.",
+    st.caption(
+        "Architecture descriptions are based on the project configuration. "
+        "Check the corresponding models.py file for the exact implementation."
+    )
 
-        "symmetry":
-            "Overall galaxy symmetry.",
+
+# ============================================================
+# LIVE IMAGE PREDICTION PAGE
+# ============================================================
+
+def prediction_page(model_name):
+    config = MODELS[model_name]
+
+    st.title(model_name)
+    st.write(config["description"])
+
+    tab_predict, tab_architecture = st.tabs([
+        "✦ Live prediction",
+        "⌘ Architecture",
+    ])
+
+    with tab_predict:
+        st.markdown("### Upload a galaxy image")
+
+        uploaded = st.file_uploader(
+            "Choose an image",
+            type=["png", "jpg", "jpeg", "webp", "tif", "tiff"],
+            key="upload_" + model_name,
+            help="Upload a galaxy image. The model uses 224×224 RGB input.",
+        )
+
+        if uploaded is None:
+            st.info(
+                "Upload a galaxy image to generate predictions for "
+                "all ten morphology attributes."
+            )
+
+            st.markdown("""
+            **What this model predicts**
+
+            - Featured
+            - Edge-on
+            - Bar
+            - Spiral arms
+            - Disturbed
+            - Merger
+            - Clumpy
+            - Symmetry
+            - Bulge prominence
+            - Roundedness
+            """)
+
+        else:
+            try:
+                image = Image.open(uploaded).convert("RGB")
+
+                left, right = st.columns([1, 1.25], gap="large")
+
+                with left:
+                    st.image(
+                        image,
+                        caption="Uploaded galaxy image",
+                        use_container_width=True,
+                    )
+
+                    st.caption(
+                        f"Original image: {image.width} × {image.height}"
+                    )
+
+                with right:
+                    with st.spinner(
+                        f"Loading {config['architecture']} and predicting..."
+                    ):
+                        model = load_model(model_name)
+                        predictions = predict_image(model, image)
+
+                    st.success("Inference completed.")
+
+                    st.markdown("### Morphology results")
+
+                    for task in BINARY:
+                        result = predictions[task]
+                        probability = result["probability"]
+
+                        with st.container(border=True):
+                            st.markdown(f"**{LABELS[task]}**")
+
+                            x, y = st.columns([1, 1])
+
+                            x.metric(
+                                "Predicted label",
+                                result["label"],
+                            )
+                            y.metric(
+                                "Positive probability",
+                                f"{probability:.1%}",
+                            )
+
+                            st.progress(
+                                max(0.0, min(1.0, probability)),
+                                text="Positive-class probability",
+                            )
+
+                    st.markdown("### Multiclass attributes")
+
+                    for task in MULTI:
+                        result = predictions[task]
+
+                        with st.container(border=True):
+                            st.markdown(f"**{LABELS[task]}**")
+
+                            st.metric(
+                                "Predicted class",
+                                result["label"],
+                                f"Confidence {result['confidence']:.1%}",
+                            )
+
+                            for name, probability in result[
+                                "probabilities"
+                            ].items():
+                                st.progress(
+                                    max(0.0, min(1.0, probability)),
+                                    text=f"{name}: {probability:.1%}",
+                                )
+
+                    export = {
+                        "model": model_name,
+                        "device": str(DEVICE),
+                        "image": uploaded.name,
+                        "predictions": predictions,
+                    }
+
+                    st.download_button(
+                        "Download prediction results (JSON)",
+                        data=json.dumps(export, indent=2),
+                        file_name="galaxai_prediction.json",
+                        mime="application/json",
+                        key="download_" + model_name,
+                    )
+
+                    st.caption(
+                        "Probabilities are model outputs, not calibrated "
+                        "scientific certainty. Binary labels use the "
+                        "0.70 threshold; validate threshold behaviour "
+                        "before using predictions in research conclusions."
+                    )
+
+            except Exception as exc:
+                st.error("Prediction could not be completed.")
+                st.exception(exc)
+
+                st.info(
+                    "Check that the checkpoint, model definition, "
+                    "class name and checkpoint state dictionary match."
+                )
+
+    with tab_architecture:
+        show_architecture_details(model_name)
+
+# ============================================================
+# HOME PAGE
+# ============================================================
+
+def home_page():
+    st.markdown("""
+    <div class="eyebrow">MISSION CONTROL / RESEARCH OVERVIEW</div>
+    <h1>Mapping the morphology of galaxies</h1>
+    <p>
+    How effectively can different CNN architectures learn multiple
+    morphological attributes from Hubble Space Telescope galaxy images,
+    and how do architectural differences affect common and rare features?
+    </p>
+    """, unsafe_allow_html=True)
+
+    st.markdown("## Research at a glance")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric("Image records", "80,632")
+    c2.metric("Model architectures", "3")
+    c3.metric("Morphology tasks", "10")
+    c4.metric("Output logits", "15")
+
+    st.markdown("## Explore the laboratory")
+
+    cards = [
+        (
+            "Model 1",
+            "Custom CNN V2",
+            "A convolutional baseline with four feature-extraction blocks.",
+            "Model 1 — Custom CNN V2",
+        ),
+        (
+            "Model 2",
+            "ResNet-18",
+            "A residual network with an ImageNet-pretrained backbone.",
+            "Model 2 — ResNet-18",
+        ),
+        (
+            "Model 3",
+            "MobileNetV3-Large",
+            "An efficient convolutional architecture with a custom multi-task head.",
+            "Model 3 — MobileNetV3-Large",
+        ),
+    ]
+
+    cols = st.columns(3, gap="large")
+
+    for col, (number, title, description, model_name) in zip(cols, cards):
+        with col:
+            with st.container(border=True):
+                st.markdown(f"### ✦ {number}")
+                st.subheader(title)
+                st.write(description)
+
+                if st.button(
+                    "Open prediction →",
+                    key="home_predict_" + number,
+                    use_container_width=True,
+                ):
+                    st.session_state["page"] = model_name
+                    st.rerun()
+
+                if st.button(
+                    "Open architecture ↗",
+                    key="home_arch_" + number,
+                    use_container_width=True,
+                ):
+                    st.session_state["page"] = model_name
+                    st.session_state["open_architecture"] = True
+                    st.rerun()
+
+    st.markdown("## Research workflow")
+
+    st.markdown("""
+    <div class="arch-flow">
+      <div class="arch-node">
+        <span>01 / DATA</span>
+        <b>Galaxy Zoo: Hubble</b>
+        <small>Galaxy images and morphology annotations.</small>
+      </div>
+      <div class="arch-node">
+        <span>02 / PREPROCESS</span>
+        <b>Image preparation</b>
+        <small>RGB, resize to 224×224, normalize to [-1, 1].</small>
+      </div>
+      <div class="arch-node">
+        <span>03 / TRAIN</span>
+        <b>Multi-task learning</b>
+        <small>Eight binary tasks and two multiclass tasks.</small>
+      </div>
+      <div class="arch-node">
+        <span>04 / EVALUATE</span>
+        <b>Held-out test set</b>
+        <small>Task-level metrics and confusion matrices.</small>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("## Dataset and experimental design")
+
+    left, right = st.columns(2, gap="large")
+
+    with left:
+        with st.container(border=True):
+            st.subheader("Dataset split")
+
+            split_data = pd.DataFrame({
+                "Split": ["Training", "Validation", "Test"],
+                "Images": [56442, 12095, 12095],
+            })
+
+            st.bar_chart(
+                split_data.set_index("Split"),
+                y="Images",
+            )
+
+            st.caption(
+                "70% training, 15% validation and 15% test; "
+                "random_state=42."
+            )
+
+    with right:
+        with st.container(border=True):
+            st.subheader("Ten morphology attributes")
+
+            for task in BINARY:
+                st.markdown(f"- **{LABELS[task]}:** binary classification")
+
+            for task in MULTI:
+                st.markdown(
+                    f"- **{LABELS[task]}:** "
+                    f"{len(CLASSES[task])}-class classification"
+                )
+
+    st.markdown("## Architecture at a glance")
+
+    for model_name, config in MODELS.items():
+        with st.expander(
+            f"{config['architecture']} — architecture overview"
+        ):
+            st.write(config["description"])
+            architecture_flow(model_name)
+
+            if st.button(
+                "Explore full architecture",
+                key="home_full_arch_" + model_name,
+            ):
+                st.session_state["page"] = model_name
+                st.session_state["open_architecture"] = True
+                st.rerun()
+
+    st.markdown("## Research principles")
+
+    p1, p2, p3 = st.columns(3)
+
+    with p1:
+        with st.container(border=True):
+            st.subheader("Consistent evaluation")
+            st.write(
+                "Use the same held-out test split and task definitions "
+                "when comparing all three architectures."
+            )
+
+    with p2:
+        with st.container(border=True):
+            st.subheader("Class imbalance matters")
+            st.write(
+                "Accuracy alone can hide poor recognition of rare features. "
+                "Inspect precision, recall, F1 and confusion matrices."
+            )
+
+    with p3:
+        with st.container(border=True):
+            st.subheader("Scientific limitations")
+            st.write(
+                "Predictions reflect the learned dataset labels and "
+                "annotation thresholds. They are not ground truth "
+                "for every individual galaxy."
+            )
+
+
+# ============================================================
+# METRIC EXTRACTION
+# ============================================================
+
+def find_metric(metrics, candidates):
+    """
+    Search known metric names without assuming one particular JSON schema.
+    """
+    if not isinstance(metrics, dict):
+        return None
+
+    for key in candidates:
+        if key in metrics and isinstance(
+            metrics[key], (int, float)
+        ):
+            return metrics[key]
+
+    return None
+
+
+def get_model_score(metrics):
+    """
+    Try the documented summary keys first.
+    Fall back to the task-level scores if necessary.
+    """
+    if not metrics:
+        return None
+
+    summary = metrics.get("summary", {})
+
+    for key in [
+        "overall_macro_task_f1",
+        "overall_macro_f1",
+        "macro_task_f1",
+    ]:
+        if key in summary:
+            return summary[key]
+
+        if key in metrics:
+            return metrics[key]
+
+    task_scores = []
+
+    task_metrics = metrics.get("tasks", {})
+
+    if isinstance(task_metrics, dict):
+        for task, values in task_metrics.items():
+            if isinstance(values, dict):
+                score = find_metric(
+                    values,
+                    ["f1", "f1_score", "macro_f1"],
+                )
+                if score is not None:
+                    task_scores.append(float(score))
+
+    if task_scores:
+        return sum(task_scores) / len(task_scores)
+
+    return None
+
+
+def find_task_metrics(metrics):
+    """
+    Support a few common JSON layouts:
+    tasks -> task name -> metric dictionary,
+    or task names directly at the root.
+    """
+    if not isinstance(metrics, dict):
+        return {}
+
+    if isinstance(metrics.get("tasks"), dict):
+        return metrics["tasks"]
+
+    found = {}
+
+    for task in TASKS:
+        value = metrics.get(task)
+
+        if isinstance(value, dict):
+            found[task] = value
+
+    return found
+
+
+# ============================================================
+# MODEL COMPARISON PAGE
+# ============================================================
+
+def comparison_page():
+    st.title("Three-model comparison")
+    st.write(
+        "Compare the custom CNN baseline, ResNet-18 and "
+        "MobileNetV3-Large using the saved held-out test evaluations."
+    )
+
+    loaded = {}
+    missing = []
+
+    for model_name in MODELS:
+        metrics, path = load_metrics(model_name)
+
+        if metrics:
+            loaded[model_name] = {
+                "metrics": metrics,
+                "path": path,
+            }
+        else:
+            missing.append(model_name)
+
+    if missing:
+        st.warning(
+            "Evaluation JSON not found for: "
+            + ", ".join(missing)
+            + ". Check the results folders and metric file names."
+        )
+
+    if not loaded:
+        st.error(
+            "No test_metrics.json files were found. "
+            "The comparison dashboard needs the saved evaluation JSONs."
+        )
+        st.markdown("Expected locations include:")
+
+        for model_name, config in MODELS.items():
+            for path in config["metrics"]:
+                st.markdown(f"- {model_name}: {path}")
+
+        return
+
+    st.markdown("## Overall performance")
+
+    rows = []
+
+    # Values recorded from the completed test evaluations.
+    # These are used as fallbacks if a JSON summary uses another schema.
+    recorded = {
+        "Model 1 — Custom CNN V2": {
+            "pooled_accuracy": 0.8341,
+            "binary_macro_f1": 0.5262,
+            "multiclass_macro_f1": 0.7363,
+            "overall_macro_task_f1": 0.5682,
+        },
+        "Model 2 — ResNet-18": {
+            "pooled_accuracy": 0.8748,
+            "binary_macro_f1": 0.5889,
+            "multiclass_macro_f1": 0.8011,
+            "overall_macro_task_f1": 0.6313,
+        },
+        "Model 3 — MobileNetV3-Large": {
+            "pooled_accuracy": 0.8926,
+            "binary_macro_f1": 0.6152,
+            "multiclass_macro_f1": 0.8289,
+            "overall_macro_task_f1": 0.6579,
+        },
     }
 
+    for model_name, item in loaded.items():
+        metrics = item["metrics"]
+        summary = metrics.get("summary", {})
+        fallback = recorded.get(model_name, {})
 
-    cols = st.columns(
-        4,
-        gap="medium",
+        def summary_value(keys, fallback_key):
+            value = find_metric(summary, keys)
+
+            if value is None:
+                value = find_metric(metrics, keys)
+
+            if value is None:
+                value = fallback.get(fallback_key)
+
+            return value
+
+        rows.append({
+            "Model": model_name,
+            "Pooled accuracy": summary_value(
+                [
+                    "pooled_accuracy",
+                    "overall_pooled_accuracy",
+                    "test_pooled_accuracy",
+                ],
+                "pooled_accuracy",
+            ),
+            "Binary macro F1": summary_value(
+                ["binary_macro_f1", "binary_f1_macro"],
+                "binary_macro_f1",
+            ),
+            "Multiclass macro F1": summary_value(
+                [
+                    "multiclass_macro_f1",
+                    "multiclass_f1_macro",
+                ],
+                "multiclass_macro_f1",
+            ),
+            "Overall macro task F1": summary_value(
+                [
+                    "overall_macro_task_f1",
+                    "overall_macro_f1",
+                    "macro_task_f1",
+                ],
+                "overall_macro_task_f1",
+            ),
+        })
+
+    comparison = pd.DataFrame(rows)
+
+    display_comparison = comparison.copy()
+
+    for column in [
+        "Pooled accuracy",
+        "Binary macro F1",
+        "Multiclass macro F1",
+        "Overall macro task F1",
+    ]:
+        display_comparison[column] = display_comparison[column].apply(
+            lambda value: (
+                f"{float(value) * 100:.2f}%"
+                if pd.notna(value) else "—"
+            )
+        )
+
+    st.dataframe(
+        display_comparison,
+        use_container_width=True,
+        hide_index=True,
     )
 
+    st.caption(
+        "Pooled accuracy aggregates valid task predictions; it is not "
+        "the same as accuracy for one mutually exclusive classification. "
+        "Macro F1 averages task-level F1 scores. Fallback figures above "
+        "are the previously recorded test results; the saved JSON is "
+        "preferred whenever it exposes the relevant summary fields."
+    )
 
-    for index, task in enumerate(binary_order):
+    chart_column = "Overall macro task F1"
 
-        result = results[task]
+    if comparison[chart_column].notna().any():
+        chart_data = comparison.dropna(
+            subset=[chart_column]
+        ).set_index("Model")[[chart_column]]
 
-        score = float(result["score"])
+        st.markdown("### Overall macro task F1")
+        st.bar_chart(chart_data)
 
-        detected = bool(result["detected"])
+    st.markdown("## Task-by-task comparison")
 
-        status = (
-            "DETECTED"
-            if detected
-            else "NOT DETECTED"
-        )
+    task_rows = []
 
-        status_class = (
-            "status-detected"
-            if detected
-            else "status-negative"
-        )
+    for model_name, item in loaded.items():
+        metrics = item["metrics"]
+        task_metrics = find_task_metrics(metrics)
 
-        with cols[index % 4]:
+        for task in TASKS:
+            values = task_metrics.get(task, {})
 
-            st.html(
-                f"""
-                <div class="result-card">
+            if not isinstance(values, dict):
+                values = {}
 
-                    <div class="result-label">
-                        {result["label"]}
-                    </div>
-
-                    <div style="margin-top:10px;">
-
-                        <span class="{status_class}">
-                            {status}
-                        </span>
-
-                    </div>
-
-                    <div class="result-score">
-                        Model score · {score:.3f}
-                    </div>
-
-                    <div class="score-track">
-
-                        <div
-                            class="score-fill"
-                            style="width:{score * 100:.1f}%"
-                        ></div>
-
-                    </div>
-
-                    <div style="
-                        color:#687596;
-                        font-size:0.70rem;
-                        line-height:1.5;
-                        margin-top:12px;
-                    ">
-                        {binary_descriptions[task]}
-                    </div>
-
-                </div>
-                """
+            f1 = find_metric(
+                values,
+                ["f1", "f1_score", "macro_f1"],
             )
 
+            precision = find_metric(
+                values,
+                ["precision", "macro_precision"],
+            )
 
-    # ========================================================
-    # MULTICLASS
-    # ========================================================
+            recall = find_metric(
+                values,
+                ["recall", "macro_recall"],
+            )
 
-    st.html("<br>")
+            # Use recorded per-task F1 results if needed.
+            recorded_f1 = {
+                "Model 1 — Custom CNN V2": {
+                    "featured": .9503,
+                    "roundedness": .8286,
+                    "symmetry": .7531,
+                    "clumpy": .7123,
+                    "bar": .1788,
+                    "merger": .1634,
+                    "disturbed": .0843,
+                },
+                "Model 2 — ResNet-18": {
+                    "featured": .9660,
+                    "edge_on": .8287,
+                    "bar": .2742,
+                    "spiral_arms": .7152,
+                    "disturbed": .0751,
+                    "merger": .3108,
+                    "clumpy": .7756,
+                    "symmetry": .7655,
+                    "bulge": .7034,
+                    "roundedness": .8988,
+                },
+                "Model 3 — MobileNetV3-Large": {
+                    "featured": .9791,
+                    "edge_on": .8392,
+                    "bar": .3074,
+                    "spiral_arms": .7156,
+                    "disturbed": .0792,
+                    "merger": .4274,
+                    "clumpy": .7921,
+                    "symmetry": .7815,
+                    "bulge": .7221,
+                    "roundedness": .9357,
+                },
+            }
 
-    st.html(
-        """
-        <div class="section-kicker">
-            MULTICLASS MORPHOLOGY
-        </div>
+            if f1 is None:
+                f1 = recorded_f1.get(model_name, {}).get(task)
 
-        <div style="
-            color:#8e9ab8;
-            font-size:0.82rem;
-            margin-bottom:15px;
-        ">
-            These attributes are predicted from multiple
-            morphological categories.
-        </div>
-        """
-    )
+            task_rows.append({
+                "Model": model_name,
+                "Task": LABELS[task],
+                "F1": f1,
+                "Precision": precision,
+                "Recall": recall,
+            })
 
+    task_df = pd.DataFrame(task_rows)
 
-    multi_col1, multi_col2 = st.columns(
-        2,
-        gap="medium",
-    )
-
-
-    # ========================================================
-    # BULGE
-    # ========================================================
-
-    bulge = results["bulge"]
-
-    with multi_col1:
-
-        st.html(
-            f"""
-            <div class="result-card">
-
-                <div class="result-label">
-                    Bulge Prominence
-                </div>
-
-                <div class="result-value">
-                    {bulge["prediction"]}
-                </div>
-
-                <div class="result-score">
-                    Predicted class score ·
-                    {float(bulge["score"]):.3f}
-                </div>
-
-                <div class="score-track">
-
-                    <div
-                        class="score-fill"
-                        style="
-                            width:
-                            {float(bulge["score"]) * 100:.1f}%
-                        "
-                    ></div>
-
-                </div>
-
-                <div style="
-                    color:#687596;
-                    font-size:0.70rem;
-                    line-height:1.5;
-                    margin-top:12px;
-                ">
-                    None · Just noticeable · Obvious · Dominant
-                </div>
-
-            </div>
-            """
+    if not task_df.empty:
+        chosen_task = st.selectbox(
+            "Select a morphology attribute",
+            [LABELS[t] for t in TASKS],
         )
 
+        selected = task_df[task_df["Task"] == chosen_task].copy()
 
-    # ========================================================
-    # ROUNDEDNESS
-    # ========================================================
+        if selected["F1"].notna().any():
+            chart = selected.dropna(subset=["F1"]).set_index("Model")[["F1"]]
+            st.bar_chart(chart)
 
-    rounded = results["roundedness"]
-
-    with multi_col2:
-
-        st.html(
-            f"""
-            <div class="result-card">
-
-                <div class="result-label">
-                    Roundedness
-                </div>
-
-                <div class="result-value">
-                    {rounded["prediction"]}
-                </div>
-
-                <div class="result-score">
-                    Predicted class score ·
-                    {float(rounded["score"]):.3f}
-                </div>
-
-                <div class="score-track">
-
-                    <div
-                        class="score-fill"
-                        style="
-                            width:
-                            {float(rounded["score"]) * 100:.1f}%
-                        "
-                    ></div>
-
-                </div>
-
-                <div style="
-                    color:#687596;
-                    font-size:0.70rem;
-                    line-height:1.5;
-                    margin-top:12px;
-                ">
-                    Completely rounded · In-between · Cigar-shaped
-                </div>
-
-            </div>
-            """
+        st.dataframe(
+            selected,
+            use_container_width=True,
+            hide_index=True,
         )
 
+    st.markdown("## Confusion matrices")
 
-# ============================================================
-# RESEARCH EVIDENCE
-# ============================================================
-
-st.markdown(
-    '<div class="divider"></div>',
-    unsafe_allow_html=True,
-)
-
-st.html(
-    """
-    <div class="section-kicker">
-        RESEARCH EVIDENCE
-    </div>
-
-    <div class="section-title">
-        Model 1 — Quantitative Evaluation
-    </div>
-
-    <div class="section-description">
-        Held-out test-set evaluation of the Custom CNN V2 baseline.
-    </div>
-    """
-)
-
-
-# ============================================================
-# KEY METRICS
-# ============================================================
-
-metric1, metric2, metric3, metric4 = st.columns(
-    4,
-    gap="medium",
-)
-
-
-with metric1:
-
-    st.html(
-        """
-        <div class="metric-card">
-
-            <div class="metric-label">
-                Overall Pooled Accuracy
-            </div>
-
-            <div class="metric-value">
-                83.41%
-            </div>
-
-            <div class="metric-description">
-                Across all valid task predictions.
-                This is not a conventional single-label accuracy.
-            </div>
-
-        </div>
-        """
+    chosen_model = st.selectbox(
+        "Select a model",
+        list(loaded.keys()),
+        key="heatmap_model",
     )
 
-
-with metric2:
-
-    st.html(
-        """
-        <div class="metric-card">
-
-            <div class="metric-label">
-                Overall Macro Task F1
-            </div>
-
-            <div class="metric-value">
-                56.82%
-            </div>
-
-            <div class="metric-description">
-                Mean F1 across the ten morphology tasks.
-            </div>
-
-        </div>
-        """
+    chosen_task = st.selectbox(
+        "Select a task",
+        TASKS,
+        format_func=lambda task: LABELS[task],
+        key="heatmap_task",
     )
 
+    heatmap_dir = MODELS[chosen_model]["heatmaps"]
 
-with metric3:
+    possible_files = [
+        heatmap_dir / f"{chosen_task}_confusion_matrix.png",
+        heatmap_dir / f"{chosen_task}_confusion_matrix.jpg",
+        heatmap_dir / f"{chosen_task}_confusion_matrix.png.png",
+        heatmap_dir / f"{chosen_task}_cm.png",
+    ]
 
-    st.html(
-        """
-        <div class="metric-card">
-
-            <div class="metric-label">
-                Best Validation Epoch
-            </div>
-
-            <div class="metric-value">
-                27
-            </div>
-
-            <div class="metric-description">
-                Selected using the lowest validation loss.
-            </div>
-
-        </div>
-        """
+    found_image = next(
+        (path for path in possible_files if path.is_file()),
+        None,
     )
 
-
-with metric4:
-
-    st.html(
-        """
-        <div class="metric-card">
-
-            <div class="metric-label">
-                Best Validation Loss
-            </div>
-
-            <div class="metric-value">
-                6.283238
-            </div>
-
-            <div class="metric-description">
-                Best Model 1 checkpoint.
-            </div>
-
-        </div>
-        """
-    )
-
-
-# ============================================================
-# TRAINING / VALIDATION LOSS
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        TRAINING
-    </div>
-
-    <div class="section-title">
-        Training & Validation Loss
-    </div>
-
-    <div class="section-description">
-        Learning behaviour of Custom CNN V2 across the training epochs.
-    </div>
-    """
-)
-
-
-loss_col1, loss_col2 = st.columns(
-    [1.55, 1],
-    gap="large",
-)
-
-
-with loss_col1:
-
-    if LOSS_GRAPH.exists():
-
+    if found_image:
         st.image(
-            str(LOSS_GRAPH),
+            str(found_image),
+            caption=f"{chosen_model} — {LABELS[chosen_task]}",
             use_container_width=True,
         )
-
     else:
-
-        st.warning(
-            "Loss graph not found. Expected file: "
-            "results/model1_v2_loss_curve.png"
+        st.info(
+            "The heatmap file was not found at the expected path. "
+            "Check the filenames in: " + str(heatmap_dir)
         )
 
+    st.markdown("## Evaluation files")
 
-with loss_col2:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                WHAT THE GRAPH SHOWS
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                Learning and generalization
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.84rem;
-                line-height:1.75;
-                margin-top:12px;
-            ">
-                The training curve shows how the optimization
-                objective changes while the model learns from
-                the training data.
-            </p>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.84rem;
-                line-height:1.75;
-            ">
-                The validation curve measures how the learned
-                representation performs on unseen validation data.
-            </p>
-
-            <div class="info-box">
-
-                <div class="info-title">
-                    Checkpoint Selection
-                </div>
-
-                The final epoch was not automatically selected.
-                The checkpoint with the lowest validation loss
-                was selected to reduce the risk of overfitting.
-
-            </div>
-
-            <br>
-
-            <div class="info-box">
-
-                <div class="info-title">
-                    Best Checkpoint
-                </div>
-
-                Epoch 27
-
-                <br>
-
-                Validation loss: 6.283238
-
-            </div>
-
-        </div>
-        """
-    )
+    for model_name, item in loaded.items():
+        with st.expander(model_name):
+            st.write("Metrics file:", str(item["path"]))
+            st.write("Architecture:", MODELS[model_name]["architecture"])
+            st.write("Best epoch:", MODELS[model_name]["best_epoch"])
 
 
 # ============================================================
-# MULTI-TASK LOSS DESIGN
+# APP NAVIGATION
 # ============================================================
 
-st.html("<br>")
+PAGE_HOME = "Home"
+PAGE_COMPARISON = "Three-model comparison"
 
-st.html(
-    """
-    <div class="section-kicker">
-        LOSS FUNCTION
-    </div>
-
-    <div class="section-title">
-        Multi-Task Loss Design
-    </div>
-
-    <div class="section-description">
-        Different output types require different classification losses.
-    </div>
-    """
-)
-
-
-loss1, loss2, loss3 = st.columns(
-    3,
-    gap="medium",
-)
-
-
-with loss1:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                8 BINARY TASKS
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                BCEWithLogitsLoss
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                Featured, Edge-on, Bar, Spiral Arms,
-                Disturbed, Merger, Clumpy Appearance
-                and Galaxy Symmetry.
-            </p>
-
-        </div>
-        """
-    )
-
-
-with loss2:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                2 MULTICLASS TASKS
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                CrossEntropyLoss
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                Bulge Prominence has four classes,
-                while Roundedness has three classes.
-            </p>
-
-        </div>
-        """
-    )
-
-
-with loss3:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                MASKING & WEIGHTING
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                Hierarchical labels
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                Task-specific masks exclude unavailable or
-                ambiguous labels. Class weighting reduces
-                the effect of severe class imbalance.
-            </p>
-
-        </div>
-        """
-    )
-
-
-# ============================================================
-# CONFUSION MATRIX ANALYSIS
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        TEST SET
-    </div>
-
-    <div class="section-title">
-        Confusion Matrix Analysis
-    </div>
-
-    <div class="section-description">
-        Confusion matrices show the distribution of actual and
-        predicted classes for each morphology task.
-    </div>
-    """
-)
-
-
-cm_data = [
-
-    {
-        "task": "Featured",
-        "file": "featured_confusion_matrix.png",
-        "type": "Binary",
-        "headline": "Strongest binary task",
-        "metrics": "F1 95.03% · ROC-AUC 99.81% · Recall 97.85%",
-        "point":
-            "The model performs very strongly on Featured morphology."
-    },
-
-    {
-        "task": "Edge-on",
-        "file": "edge_on_confusion_matrix.png",
-        "type": "Binary",
-        "headline": "High positive recall",
-        "metrics": "F1 68.69% · ROC-AUC 98.01% · Recall 95.38%",
-        "point":
-            "The model detects most positive edge-on galaxies, "
-            "but produces more false positives."
-    },
-
-    {
-        "task": "Bar",
-        "file": "bar_confusion_matrix.png",
-        "type": "Binary",
-        "headline": "Challenging rare feature",
-        "metrics": "F1 17.88% · ROC-AUC 80.22% · Recall 67.95%",
-        "point":
-            "Bar detection is difficult because the positive "
-            "class is relatively rare."
-    },
-
-    {
-        "task": "Spiral Arms",
-        "file": "spiral_arms_confusion_matrix.png",
-        "type": "Binary",
-        "headline": "Meaningful spiral recognition",
-        "metrics": "F1 68.10% · ROC-AUC 90.14% · Recall 72.59%",
-        "point":
-            "The model learns useful spiral-arm structure."
-    },
-
-    {
-        "task": "Disturbed",
-        "file": "disturbed_confusion_matrix.png",
-        "type": "Binary",
-        "headline": "Very challenging rare feature",
-        "metrics": "F1 8.43% · ROC-AUC 75.01% · Recall 59.09%",
-        "point":
-            "The low F1 is strongly affected by severe class imbalance."
-    },
-
-    {
-        "task": "Merger",
-        "file": "merger_confusion_matrix.png",
-        "type": "Binary",
-        "headline": "Rare morphology challenge",
-        "metrics": "F1 16.34% · ROC-AUC 85.06% · Recall 66.91%",
-        "point":
-            "Merger detection remains difficult because positive "
-            "examples are rare."
-    },
-
-    {
-        "task": "Clumpy Appearance",
-        "file": "clumpy_confusion_matrix.png",
-        "type": "Binary",
-        "headline": "Good morphology detection",
-        "metrics": "F1 71.23% · ROC-AUC 92.51% · Recall 86.16%",
-        "point":
-            "The model identifies clumpy appearance reasonably well."
-    },
-
-    {
-        "task": "Galaxy Symmetry",
-        "file": "symmetry_confusion_matrix.png",
-        "type": "Binary",
-        "headline": "Balanced performance",
-        "metrics": "F1 75.31% · ROC-AUC 85.61% · Recall 78.46%",
-        "point":
-            "Symmetry is one of the stronger binary tasks."
-    },
-
-    {
-        "task": "Bulge Prominence",
-        "file": "bulge_confusion_matrix.png",
-        "type": "Multiclass",
-        "headline": "Four-class prediction",
-        "metrics": "Accuracy 73.79% · Macro F1 64.39% · Balanced Acc. 72.54%",
-        "point":
-            "The dominant bulge class is recognized better than "
-            "the rarer categories."
-    },
-
-    {
-        "task": "Roundedness",
-        "file": "roundedness_confusion_matrix.png",
-        "type": "Multiclass",
-        "headline": "Strong multiclass result",
-        "metrics": "Accuracy 83.93% · Macro F1 82.86% · Balanced Acc. 87.26%",
-        "point":
-            "Roundedness is the strongest multiclass task."
-    },
-
+PAGE_OPTIONS = [
+    PAGE_HOME,
+    "Model 1 — Custom CNN V2",
+    "Model 2 — ResNet-18",
+    "Model 3 — MobileNetV3-Large",
+    PAGE_COMPARISON,
 ]
 
+if "page" not in st.session_state:
+    st.session_state["page"] = PAGE_HOME
 
-# ============================================================
-# CONFUSION MATRIX DISPLAY
-# ============================================================
+if st.session_state["page"] not in PAGE_OPTIONS:
+    st.session_state["page"] = PAGE_HOME
 
-for i in range(0, len(cm_data), 2):
+with st.sidebar:
+    st.markdown("## ✦ GALAXAI")
+    st.caption("Galaxy morphology research lab")
+    st.divider()
 
-    row = cm_data[i:i + 2]
+    st.markdown("### Navigation")
 
-    columns = st.columns(
-        2,
-        gap="large",
+    selected_page = st.radio(
+        "Choose a destination",
+        PAGE_OPTIONS,
+        index=PAGE_OPTIONS.index(st.session_state["page"]),
+        key="navigation_radio",
+        label_visibility="collapsed",
     )
 
-    for col, item in zip(columns, row):
+    if selected_page != st.session_state["page"]:
+        st.session_state["page"] = selected_page
+        st.session_state["open_architecture"] = False
+        st.rerun()
 
-        with col:
+    st.divider()
 
-            cm_path = (
-                CONFUSION_DIR /
-                item["file"]
-            )
+    st.markdown("### System status")
 
-            st.html(
-                f"""
-                <div class="glass-panel">
-
-                    <div class="section-kicker">
-                        {item["type"]} TASK
-                    </div>
-
-                    <div style="
-                        color:#eef1ff;
-                        font-size:1.15rem;
-                        font-weight:800;
-                        margin-top:4px;
-                    ">
-                        {item["task"]}
-                    </div>
-
-                    <div style="
-                        color:#b9c5ff;
-                        font-size:0.76rem;
-                        font-weight:800;
-                        margin-top:7px;
-                    ">
-                        {item["headline"]}
-                    </div>
-
-                </div>
-                """
-            )
-
-            if cm_path.exists():
-
-                st.image(
-                    str(cm_path),
-                    use_container_width=True,
-                )
-
-            else:
-
-                st.warning(
-                    f"Matrix image not found: {item['file']}"
-                )
-
-            st.html(
-                f"""
-                <div class="research-note">
-
-                    <strong>
-                        {item["metrics"]}
-                    </strong>
-
-                    <br><br>
-
-                    {item["point"]}
-
-                </div>
-                """
-            )
-
-
-# ============================================================
-# PERFORMANCE SUMMARY
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        PERFORMANCE SUMMARY
-    </div>
-
-    <div class="section-title">
-        Strongest & Most Challenging Tasks
-    </div>
-    """
-)
-
-
-summary1, summary2 = st.columns(
-    2,
-    gap="large",
-)
-
-
-with summary1:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                STRONGEST TASKS
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                Common and visually distinctive morphology
-            </div>
-
-            <ul style="
-                color:#8e9ab8;
-                line-height:1.9;
-                font-size:0.84rem;
-            ">
-
-                <li>
-                    Featured F1:
-                    <strong style="color:#dfe4ff;">
-                        95.03%
-                    </strong>
-                </li>
-
-                <li>
-                    Roundedness accuracy:
-                    <strong style="color:#dfe4ff;">
-                        83.93%
-                    </strong>
-                </li>
-
-                <li>
-                    Symmetry F1:
-                    <strong style="color:#dfe4ff;">
-                        75.31%
-                    </strong>
-                </li>
-
-                <li>
-                    Clumpy F1:
-                    <strong style="color:#dfe4ff;">
-                        71.23%
-                    </strong>
-                </li>
-
-            </ul>
-
-        </div>
-        """
+    st.markdown(
+        "🟢 CUDA available"
+        if torch.cuda.is_available()
+        else "⚪ CPU inference"
     )
 
+    st.caption(f"Device: {DEVICE}")
 
-with summary2:
+    st.markdown("### Checkpoints")
 
-    st.html(
-        """
-        <div class="glass-panel">
+    for model_name, config in MODELS.items():
+        if config["checkpoint"].is_file():
+            st.markdown(f"🟢 {config['architecture']}")
+        else:
+            st.markdown(f"🔴 {config['architecture']}")
 
-            <div class="result-label">
-                CHALLENGING TASKS
-            </div>
+    st.divider()
 
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                Rare morphology features
-            </div>
-
-            <ul style="
-                color:#8e9ab8;
-                line-height:1.9;
-                font-size:0.84rem;
-            ">
-
-                <li>
-                    Bar F1:
-                    <strong style="color:#dfe4ff;">
-                        17.88%
-                    </strong>
-                </li>
-
-                <li>
-                    Merger F1:
-                    <strong style="color:#dfe4ff;">
-                        16.34%
-                    </strong>
-                </li>
-
-                <li>
-                    Disturbed F1:
-                    <strong style="color:#dfe4ff;">
-                        8.43%
-                    </strong>
-                </li>
-
-                <li>
-                    Severe class imbalance affects minority features.
-                </li>
-
-            </ul>
-
-        </div>
-        """
+    st.caption(
+        "Research prototype · Galaxy Zoo: Hubble · "
+        "Multi-task deep learning"
     )
 
 
 # ============================================================
-# METRIC INTERPRETATION
+# PAGE ROUTER
 # ============================================================
 
-st.html("<br>")
+current_page = st.session_state["page"]
 
-st.html(
-    """
-    <div class="section-kicker">
-        METRIC INTERPRETATION
-    </div>
+if current_page == PAGE_HOME:
+    home_page()
 
-    <div class="section-title">
-        Understanding the Evaluation
-    </div>
-    """
-)
+elif current_page == PAGE_COMPARISON:
+    comparison_page()
 
+elif current_page in MODELS:
+    prediction_page(current_page)
 
-interpret1, interpret2, interpret3 = st.columns(
-    3,
-    gap="medium",
-)
-
-
-with interpret1:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                MACRO TASK F1
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                56.82%
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                Average F1 across all ten morphology tasks.
-                It reflects the fact that common tasks perform
-                much better than several rare tasks.
-            </p>
-
-        </div>
-        """
-    )
-
-
-with interpret2:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                POOLED ACCURACY
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                83.41%
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                Calculated across all valid task predictions.
-                It should not be interpreted as a conventional
-                single-label classification accuracy.
-            </p>
-
-        </div>
-        """
-    )
-
-
-with interpret3:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                ROC-AUC VS F1
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                Ranking vs threshold
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                ROC-AUC evaluates ranking across thresholds,
-                while F1 depends on a specific classification
-                threshold. Therefore both metrics can differ
-                substantially.
-            </p>
-
-        </div>
-        """
-    )
+else:
+    st.session_state["page"] = PAGE_HOME
+    st.rerun()
 
 
 # ============================================================
-# DATASET
+# ARCHITECTURE DEEP-LINK SUPPORT
 # ============================================================
 
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        DATASET
-    </div>
-
-    <div class="section-title">
-        Galaxy Zoo: Hubble
-    </div>
-    """
-)
-
-
-data1, data2, data3 = st.columns(
-    3,
-    gap="medium",
-)
-
-
-with data1:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                IMAGE RECORDS
-            </div>
-
-            <div class="metric-value">
-                80,632
-            </div>
-
-            <div class="metric-description">
-                Galaxy image records used in the project.
-            </div>
-
-        </div>
-        """
-    )
-
-
-with data2:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                DATA SPLIT
-            </div>
-
-            <div style="
-                margin-top:15px;
-            ">
-
-                <span class="task-tag">
-                    56,442 Train
-                </span>
-
-                <span class="task-tag">
-                    12,095 Validation
-                </span>
-
-                <span class="task-tag">
-                    12,095 Test
-                </span>
-
-            </div>
-
-            <div class="metric-description">
-                70 / 15 / 15 split.
-            </div>
-
-        </div>
-        """
-    )
-
-
-with data3:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                LABEL STRATEGY
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                Hierarchical annotations
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                Task-specific masks exclude unavailable or
-                ambiguous labels instead of treating them as
-                negative examples.
-            </p>
-
-        </div>
-        """
-    )
-
-
-# ============================================================
-# MORPHOLOGY TASKS
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        TASK DEFINITION
-    </div>
-
-    <div class="section-title">
-        Ten Morphology Attributes
-    </div>
-    """
-)
-
-
-task1, task2 = st.columns(
-    2,
-    gap="large",
-)
-
-
-with task1:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                8 BINARY ATTRIBUTES
-            </div>
-
-            <div style="margin-top:15px;">
-
-                <span class="task-tag">Featured</span>
-                <span class="task-tag">Edge-on</span>
-                <span class="task-tag">Bar</span>
-                <span class="task-tag">Spiral Arms</span>
-                <span class="task-tag">Disturbed</span>
-                <span class="task-tag">Merger</span>
-                <span class="task-tag">Clumpy Appearance</span>
-                <span class="task-tag">Galaxy Symmetry</span>
-
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-                margin-top:15px;
-            ">
-                Each binary task produces one output logit and
-                is converted to a score using the sigmoid function.
-            </p>
-
-        </div>
-        """
-    )
-
-
-with task2:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                2 MULTICLASS ATTRIBUTES
-            </div>
-
-            <div style="margin-top:15px;">
-
-                <strong style="color:#e9edff;">
-                    Bulge Prominence
-                </strong>
-
-                <br>
-
-                <span class="task-tag">None</span>
-                <span class="task-tag">Just noticeable</span>
-                <span class="task-tag">Obvious</span>
-                <span class="task-tag">Dominant</span>
-
-                <br><br>
-
-                <strong style="color:#e9edff;">
-                    Roundedness
-                </strong>
-
-                <br>
-
-                <span class="task-tag">
-                    Completely rounded
-                </span>
-
-                <span class="task-tag">
-                    In-between
-                </span>
-
-                <span class="task-tag">
-                    Cigar-shaped
-                </span>
-
-            </div>
-
-        </div>
-        """
-    )
-
-
-# ============================================================
-# MODEL ARCHITECTURE
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        MODEL ARCHITECTURE
-    </div>
-
-    <div class="section-title">
-        Custom CNN V2
-    </div>
-
-    <div class="section-description">
-        Four convolutional blocks produce a shared feature
-        representation which is connected to ten task-specific
-        prediction heads.
-    </div>
-    """
-)
-
-
-architecture = [
-
-    (
-        "01",
-        "Input",
-        "224 × 224 × 3",
-        "RGB galaxy image",
-    ),
-
-    (
-        "02",
-        "Convolution Block 1",
-        "32 × 112 × 112",
-        "3×3 convolution + BatchNorm + ReLU + MaxPool",
-    ),
-
-    (
-        "03",
-        "Convolution Block 2",
-        "64 × 56 × 56",
-        "Feature extraction",
-    ),
-
-    (
-        "04",
-        "Convolution Block 3",
-        "128 × 28 × 28",
-        "Higher-level morphology features",
-    ),
-
-    (
-        "05",
-        "Convolution Block 4",
-        "256 × 14 × 14",
-        "Deep morphological representation",
-    ),
-
-    (
-        "06",
-        "Adaptive Average Pool",
-        "256 × 1 × 1",
-        "Spatial aggregation",
-    ),
-
-    (
-        "07",
-        "Shared Fully Connected Layer",
-        "256",
-        "Shared feature embedding",
-    ),
-
-    (
-        "08",
-        "Task Heads",
-        "15 logits",
-        "8 binary + 2 multiclass outputs",
-    ),
-
-]
-
-
-for number, title, shape, description in architecture:
-
-    st.html(
-        f"""
-        <div class="glass-panel" style="
-            margin-bottom:10px;
-            padding:17px 22px;
-        ">
-
-            <div style="
-                display:flex;
-                align-items:center;
-                gap:18px;
-                flex-wrap:wrap;
-            ">
-
-                <div style="
-                    min-width:45px;
-                    height:45px;
-                    border-radius:13px;
-
-                    background:
-                        rgba(99,102,241,0.12);
-
-                    border:
-                        1px solid rgba(129,140,248,0.20);
-
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-
-                    color:#a5b4fc;
-
-                    font-weight:800;
-                ">
-                    {number}
-                </div>
-
-                <div style="
-                    flex:1;
-                    min-width:180px;
-                ">
-
-                    <div style="
-                        color:#e0e7ff;
-                        font-size:0.9rem;
-                        font-weight:800;
-                    ">
-                        {title}
-                    </div>
-
-                    <div style="
-                        color:#65718f;
-                        font-size:0.73rem;
-                        margin-top:4px;
-                    ">
-                        {description}
-                    </div>
-
-                </div>
-
-                <div style="
-                    color:#a5b4fc;
-                    font-family:monospace;
-                    font-weight:700;
-                    font-size:0.78rem;
-                ">
-                    {shape}
-                </div>
-
-            </div>
-
-        </div>
-        """
-    )
-
-
-# ============================================================
-# TRAINING CONFIGURATION
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        TRAINING
-    </div>
-
-    <div class="section-title">
-        Training Configuration
-    </div>
-    """
-)
-
-
-train1, train2 = st.columns(
-    2,
-    gap="large",
-)
-
-
-with train1:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                OPTIMIZATION
-            </div>
-
-            <ul style="
-                color:#8e9ab8;
-                line-height:1.9;
-                font-size:0.84rem;
-            ">
-
-                <li>Optimizer: <strong>AdamW</strong></li>
-
-                <li>Learning rate: <strong>0.001</strong></li>
-
-                <li>Batch size: <strong>32</strong></li>
-
-                <li>Maximum epochs: <strong>30</strong></li>
-
-                <li>Best checkpoint: <strong>Epoch 27</strong></li>
-
-            </ul>
-
-        </div>
-        """
-    )
-
-
-with train2:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                DATA AUGMENTATION
-            </div>
-
-            <ul style="
-                color:#8e9ab8;
-                line-height:1.9;
-                font-size:0.84rem;
-            ">
-
-                <li>Resize to 224 × 224</li>
-
-                <li>Random horizontal flip</li>
-
-                <li>Random rotation up to 10°</li>
-
-                <li>Tensor conversion</li>
-
-                <li>Normalization using mean/std = 0.5</li>
-
-            </ul>
-
-        </div>
-        """
-    )
-
-
-# ============================================================
-# INFERENCE PIPELINE
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        INFERENCE PIPELINE
-    </div>
-
-    <div class="section-title">
-        How GALAXAI Analyzes a Galaxy
-    </div>
-    """
-)
-
-
-pipeline = [
-
-    (
-        "🌌",
-        "Galaxy Image",
-        "Uploaded observation",
-    ),
-
-    (
-        "⚙️",
-        "Preprocessing",
-        "224 × 224 · RGB · Normalize",
-    ),
-
-    (
-        "🧠",
-        "CNN Feature Extraction",
-        "Learned visual patterns",
-    ),
-
-    (
-        "🔭",
-        "Morphology Profile",
-        "10 independent tasks",
-    ),
-
-]
-
-
-pipeline_columns = st.columns(
-    4,
-    gap="medium",
-)
-
-
-for col, item in zip(
-    pipeline_columns,
-    pipeline,
-):
-
-    icon, title, description = item
-
-    with col:
-
-        st.html(
-            f"""
-            <div class="pipeline-box">
-
-                <div class="pipeline-icon">
-                    {icon}
-                </div>
-
-                <div class="pipeline-title">
-                    {title}
-                </div>
-
-                <div class="pipeline-description">
-                    {description}
-                </div>
-
-            </div>
-            """
-        )
-
-
-# ============================================================
-# MODEL INFORMATION
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        SYSTEM
-    </div>
-
-    <div class="section-title">
-        Model Information
-    </div>
-    """
-)
-
-
-info1, info2, info3, info4 = st.columns(
-    4,
-    gap="medium",
-)
-
-
-with info1:
-
-    st.html(
-        """
-        <div class="metric-card">
-
-            <div class="metric-label">
-                Architecture
-            </div>
-
-            <div class="metric-value">
-                CNN V2
-            </div>
-
-            <div class="metric-description">
-                Custom convolutional baseline.
-            </div>
-
-        </div>
-        """
-    )
-
-
-with info2:
-
-    parameters = info.get(
-        "parameters",
-        1242863,
-    )
-
-    st.html(
-        f"""
-        <div class="metric-card">
-
-            <div class="metric-label">
-                Trainable Parameters
-            </div>
-
-            <div class="metric-value">
-                {parameters:,}
-            </div>
-
-            <div class="metric-description">
-                Learnable model parameters.
-            </div>
-
-        </div>
-        """
-    )
-
-
-with info3:
-
-    st.html(
-        """
-        <div class="metric-card">
-
-            <div class="metric-label">
-                Morphology Tasks
-            </div>
-
-            <div class="metric-value">
-                10
-            </div>
-
-            <div class="metric-description">
-                8 binary + 2 multiclass.
-            </div>
-
-        </div>
-        """
-    )
-
-
-with info4:
-
-    st.html(
-        """
-        <div class="metric-card">
-
-            <div class="metric-label">
-                Input Resolution
-            </div>
-
-            <div class="metric-value">
-                224 × 224
-            </div>
-
-            <div class="metric-description">
-                RGB image input.
-            </div>
-
-        </div>
-        """
-    )
-
-
-# ============================================================
-# RESEARCH INTERPRETATION
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        RESEARCH INTERPRETATION
-    </div>
-
-    <div class="section-title">
-        What Model 1 Demonstrates
-    </div>
-    """
-)
-
-
-research1, research2 = st.columns(
-    2,
-    gap="large",
-)
-
-
-with research1:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                STRENGTHS
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                Strong recognition of common morphology
-            </div>
-
-            <ul style="
-                color:#8e9ab8;
-                line-height:1.85;
-                font-size:0.84rem;
-            ">
-
-                <li>
-                    Featured F1:
-                    <strong style="color:#dfe4ff;">
-                        95.03%
-                    </strong>
-                </li>
-
-                <li>
-                    Roundedness accuracy:
-                    <strong style="color:#dfe4ff;">
-                        83.93%
-                    </strong>
-                </li>
-
-                <li>
-                    Symmetry F1:
-                    <strong style="color:#dfe4ff;">
-                        75.31%
-                    </strong>
-                </li>
-
-                <li>
-                    Clumpy F1:
-                    <strong style="color:#dfe4ff;">
-                        71.23%
-                    </strong>
-                </li>
-
-            </ul>
-
-        </div>
-        """
-    )
-
-
-with research2:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                LIMITATIONS
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                Rare features remain difficult
-            </div>
-
-            <ul style="
-                color:#8e9ab8;
-                line-height:1.85;
-                font-size:0.84rem;
-            ">
-
-                <li>
-                    Bar F1:
-                    <strong style="color:#dfe4ff;">
-                        17.88%
-                    </strong>
-                </li>
-
-                <li>
-                    Merger F1:
-                    <strong style="color:#dfe4ff;">
-                        16.34%
-                    </strong>
-                </li>
-
-                <li>
-                    Disturbed F1:
-                    <strong style="color:#dfe4ff;">
-                        8.43%
-                    </strong>
-                </li>
-
-                <li>
-                    Severe class imbalance affects minority features.
-                </li>
-
-            </ul>
-
-        </div>
-        """
-    )
-
-
-# ============================================================
-# FUTURE WORK
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="section-kicker">
-        NEXT EXPERIMENTS
-    </div>
-
-    <div class="section-title">
-        Future Work
-    </div>
-    """
-)
-
-
-future1, future2, future3 = st.columns(
-    3,
-    gap="medium",
-)
-
-
-with future1:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                MODEL 2
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                ResNet
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                Compare a residual architecture using the same
-                dataset, task definitions and evaluation protocol.
-            </p>
-
-        </div>
-        """
-    )
-
-
-with future2:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                MODEL 3
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                MobileNet
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                Investigate the trade-off between computational
-                efficiency and morphology classification performance.
-            </p>
-
-        </div>
-        """
-    )
-
-
-with future3:
-
-    st.html(
-        """
-        <div class="glass-panel">
-
-            <div class="result-label">
-                COMPARATIVE STUDY
-            </div>
-
-            <div style="
-                color:#e9edff;
-                font-size:1rem;
-                font-weight:800;
-                margin-top:12px;
-            ">
-                Architecture comparison
-            </div>
-
-            <p style="
-                color:#8e9ab8;
-                font-size:0.82rem;
-                line-height:1.7;
-            ">
-                Compare F1, balanced accuracy, ROC-AUC, PR-AUC,
-                parameter count and computational efficiency.
-            </p>
-
-        </div>
-        """
-    )
-
-
-# ============================================================
-# FINAL RESEARCH NOTE
-# ============================================================
-
-st.html("<br>")
-
-st.html(
-    """
-    <div class="research-note">
-
-        <strong>
-            Research conclusion
-        </strong>
-
-        <br><br>
-
-        Custom CNN V2 provides a useful multi-task baseline
-        and learns several common galaxy morphology attributes
-        effectively.
-
-        However, performance on rare attributes remains limited,
-        particularly for Bar, Merger and Disturbed morphology.
-
-        The next research step is to keep the task definition
-        and evaluation protocol fixed and compare the baseline
-        with ResNet and MobileNet architectures.
-
-        <br><br>
-
-        <strong>
-            Important metric distinction:
-        </strong>
-
-        83.41% is the pooled accuracy across valid task predictions,
-        whereas 56.82% is the overall Macro Task F1.
-        These metrics should not be treated as interchangeable.
-
-        <br><br>
-
-        <strong>
-            Important inference note:
-        </strong>
-
-        Displayed model scores are model output scores and should
-        not be interpreted as calibrated scientific probabilities
-        or certainty.
-
-    </div>
-    """
-)
-
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-st.html(
-    """
-    <div class="footer">
-
-        <div class="divider"></div>
-
-        <strong style="color:#7886aa;">
-            GALAXAI
-        </strong>
-
-        <br>
-
-        Deep Learning-Based Multi-Attribute Galaxy Morphology Analysis
-
-        <br>
-
-        Galaxy Zoo: Hubble · Hubble Space Telescope · Custom CNN V2
-
-        <br><br>
-
-        Research Prototype · Model 1 Baseline
-
-    </div>
-    """
-)
+if st.session_state.get("open_architecture", False):
+    st.session_state["open_architecture"] = False
+
+    # The model page contains a dedicated architecture tab.
+    # The session flag is consumed after navigation to avoid
+    # repeatedly triggering reruns.

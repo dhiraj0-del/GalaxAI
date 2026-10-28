@@ -1,4 +1,4 @@
-filename,image_path,featured,edge_on,bar,spiral_arms,bulge,roundedness,disturbed,merger,clumpy,symmetry,featured_mask,edge_on_mask,bar_mask,spiral_arms_mask,bulge_mask,roundedness_mask,disturbed_mask,merger_mask,clumpy_mask,symmetry_mask
+                                                                                                                                                                                                                                                                                                                                                                                                                                        filename,image_path,featured,edge_on,bar,spiral_arms,bulge,roundedness,disturbed,merger,clumpy,symmetry,featured_mask,edge_on_mask,bar_mask,spiral_arms_mask,bulge_mask,roundedness_mask,disturbed_mask,merger_mask,clumpy_mask,symmetry_mask
 20171803.jpg,data/gzh/images\20171803.jpg,1,0,0,1,1,0,-1,-1,0,0,1,1,1,1,1,1,0,0,1,1
 20181802.jpg,data/gzh/images\20181802.jpg,-1,0,0,-1,-1,-1,0,0,0,-1,0,1,1,0,0,0,1,1,1,0
 20098281.jpg,data/gzh/images\20098281.jpg,-1,-1,0,0,-1,0,-1,-1,-1,-1,0,0,1,1,0,1,0,0,0,0
